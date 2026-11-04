@@ -9,6 +9,7 @@
 !/mailer/
 !/redis/
 !/redisadmin/
+!/secretbox/
 !/session/
 !/sqlretry/
 !/telegram/
@@ -16,6 +17,7 @@
 /mailer/*
 /redis/*
 /redisadmin/*
+/secretbox/*
 /session/*
 /sqlretry/*
 /telegram/*
@@ -23,6 +25,7 @@
 !/mailer/*.go
 !/redis/*.go
 !/redisadmin/*.go
+!/secretbox/*.go
 !/session/*.go
 !/sqlretry/*.go
 !/telegram/*.go

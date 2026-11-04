@@ -21,6 +21,8 @@ var TelegramBaseURL = ""
 
 var TelegramBaseOverrideFn func() string
 
+var TelegramDurableFn func(chatID, text, parseMode string) error
+
 func TelegramBase() string {
 	if fn := TelegramBaseOverrideFn; fn != nil {
 		if v := strings.TrimRight(strings.TrimSpace(fn()), "/"); v != "" {
@@ -232,6 +234,13 @@ func enqueueTelegramAlert(message string) {
 func telegramSender() {
 	lastSent := time.Now().Add(-telegramMinInterval)
 	send := func(msg string) {
+		if fn := TelegramDurableFn; fn != nil {
+			if err := fn(GetTelegramChatID(), formatTelegramAlert(msg), "MarkdownV2"); err == nil {
+				return
+			} else {
+				log.Printf("TELEGRAM ERROR: durable enqueue failed, sending directly: %s", Redact(err.Error()))
+			}
+		}
 		if wait := telegramMinInterval - time.Since(lastSent); wait > 0 {
 			time.Sleep(wait)
 		}
