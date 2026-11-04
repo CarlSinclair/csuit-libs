@@ -103,3 +103,14 @@ func redactIPs(msg string) string {
 		return m
 	})
 }
+
+func LocationMiddleware(clientIP func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if ip := clientIP(r); ip != "" {
+				RememberRequestLocation(r, ip)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
