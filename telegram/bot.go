@@ -389,34 +389,65 @@ func ParseCommand(text string) (cmd, arg string) {
 	return strings.ToLower(cmd), arg
 }
 
-func (b *Bot) Check(ctx context.Context) (string, error) {
-	if b == nil || b.Token == "" {
-		return "", ErrNotConfigured
+type BotInfo struct {
+	ID        int64
+	Username  string
+	FirstName string
+}
+
+func (b *Bot) GetMe(ctx context.Context) (BotInfo, error) {
+	if b == nil || strings.TrimSpace(b.Token) == "" {
+		return BotInfo{}, ErrNotConfigured
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.base()+"/bot"+b.Token+"/getMe", nil)
 	if err != nil {
-		return "", fmt.Errorf("telegram getMe request: %w", err)
+		return BotInfo{}, fmt.Errorf("telegram getMe request: %w", err)
 	}
 	resp, err := b.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("telegram getMe: %w", scrub(err, b.Token))
+		return BotInfo{}, fmt.Errorf("telegram getMe: %w", scrub(err, b.Token))
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if rerr != nil {
+		return BotInfo{}, fmt.Errorf("telegram getMe: read response (status %d): %w", resp.StatusCode, scrub(rerr, b.Token))
+	}
 	var out struct {
 		OK          bool   `json:"ok"`
+		ErrorCode   int    `json:"error_code"`
 		Description string `json:"description"`
 		Result      struct {
-			Username string `json:"username"`
+			ID        int64  `json:"id"`
+			Username  string `json:"username"`
+			FirstName string `json:"first_name"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", fmt.Errorf("telegram getMe: bad response status %d", resp.StatusCode)
+		return BotInfo{}, fmt.Errorf("telegram getMe: bad response status %d", resp.StatusCode)
 	}
 	if !out.OK {
-		return "", fmt.Errorf("telegram getMe: %s", out.Description)
+		code := out.ErrorCode
+		if code == 0 {
+			code = resp.StatusCode
+		}
+		return BotInfo{}, &APIError{Method: "getMe", Code: code, Description: out.Description}
 	}
-	return out.Result.Username, nil
+	if out.Result.ID == 0 || strings.TrimSpace(out.Result.Username) == "" {
+		return BotInfo{}, errors.New("telegram getMe: response has no id or username")
+	}
+	return BotInfo{ID: out.Result.ID, Username: out.Result.Username, FirstName: out.Result.FirstName}, nil
+}
+
+func GetMe(ctx context.Context, token string) (BotInfo, error) {
+	return New(token, "", "").GetMe(ctx)
+}
+
+func (b *Bot) Check(ctx context.Context) (string, error) {
+	info, err := b.GetMe(ctx)
+	if err != nil {
+		return "", err
+	}
+	return info.Username, nil
 }
 
 func (b *Bot) SendMarkdown(ctx context.Context, chatID, text string) error {
