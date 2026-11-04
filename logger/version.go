@@ -25,7 +25,7 @@ type versionState struct {
 	Seen    map[string]int64 `json:"seen"`
 }
 
-func versionStatePath() (string, error) {
+func AppRootDir() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
@@ -33,6 +33,14 @@ func versionStatePath() (string, error) {
 	dir := filepath.Dir(exe)
 	for i := 1; i < cfg.BuildVersionUpLevels; i++ {
 		dir = filepath.Dir(dir)
+	}
+	return dir, nil
+}
+
+func versionStatePath() (string, error) {
+	dir, err := AppRootDir()
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, ".build_version"), nil
 }

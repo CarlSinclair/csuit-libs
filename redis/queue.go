@@ -12,14 +12,15 @@ import (
 )
 
 const (
-	EmailQueueName     = "email_queue"
-	EmailQueueDeadName = "email_queue_dead"
-	EmailSentLogName   = "email_sent_log"
-	EmailErrorLogName  = "email_error_log"
-	WebhookQueueName   = "webhook_queue"
-	WebhookDeadName    = "webhook_queue_dead"
-	TelegramQueueName  = "telegram_queue"
-	TelegramDeadName   = "telegram_queue_dead"
+	EmailQueueName      = "email_queue"
+	EmailQueueDeadName  = "email_queue_dead"
+	EmailQueueRetryName = "email_queue_retry"
+	EmailSentLogName    = "email_sent_log"
+	EmailErrorLogName   = "email_error_log"
+	WebhookQueueName    = "webhook_queue"
+	WebhookDeadName     = "webhook_queue_dead"
+	TelegramQueueName   = "telegram_queue"
+	TelegramDeadName    = "telegram_queue_dead"
 
 	emailLogMaxEntries = 199
 )
@@ -59,6 +60,7 @@ type EmailTask struct {
 	Attachments  []EmailAttachment `json:"attachments,omitempty"`
 	OrderID      string            `json:"order_id,omitempty"`
 	QueuedAt     string            `json:"queued_at,omitempty"`
+	Attempts     int               `json:"attempts,omitempty"`
 	RawJSON      string            `json:"-"`
 }
 
@@ -144,7 +146,12 @@ func Enqueue(queueName string, task interface{}) error {
 		Window:    10 * time.Minute,
 	}
 	if err := logger.Retry(policy, "Redis.Enqueue queue="+queueName, func() error { return pushOnce(queueName, data) }); err != nil {
-		return err
+		if serr := spoolAppend(queueName, data); serr != nil {
+			logger.Error("Redis.Enqueue: push failed and spooling failed queue=%s push_err=%v spool_err=%v", queueName, err, serr)
+			return fmt.Errorf("enqueue failed: %w (spool: %v)", err, serr)
+		}
+		logger.Persistent("redis.enqueue.spooled", 3, 10*time.Minute, "Redis.Enqueue: redis unavailable, task spooled to disk for replay queue=%s err=%v", queueName, err)
+		return nil
 	}
 	logger.Debug("Redis.Enqueue: queued queue=%s bytes=%d type=%T", queueName, len(data), task)
 	return nil

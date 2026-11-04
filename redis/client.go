@@ -44,6 +44,7 @@ func Configure(o Options) {
 	redisMu.Lock()
 	opts = o
 	redisMu.Unlock()
+	startSpool()
 }
 
 func currentOptions() Options {
