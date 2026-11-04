@@ -117,6 +117,7 @@ func createRedactingFormatter() func(level LogLevel, file string, line int, msg 
 		msg = filePathRegex.ReplaceAllStringFunc(msg, func(s string) string {
 			return "[REDACTED_FILE_PATH]"
 		})
+		remember(level, msg)
 		return fmt.Sprintf("%s [%s] %s:%d %s: %s", time.Now().In(logTimeZone.Load()).Format("2006/01/02 15:04:05"), serviceName, file, line, level.String(), msg)
 	}
 }

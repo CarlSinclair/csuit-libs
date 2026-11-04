@@ -31,5 +31,5 @@ func Redact(s string) string {
 	if v, ok := lastTelegramBase.Load().(string); ok && v != "" {
 		s = strings.ReplaceAll(s, v, "[TELEGRAM_PROXY]")
 	}
-	return s
+	return redactIPs(s)
 }
