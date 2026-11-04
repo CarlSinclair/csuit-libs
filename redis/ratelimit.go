@@ -56,13 +56,29 @@ func AllowPublic(key string) (bool, int, error) {
 	if cfg.Limit <= 0 {
 		return true, 0, nil
 	}
+	return allow("ratelimit:public:"+key, cfg.Limit, cfg.Window)
+}
+
+func Allow(key string, limit int, window time.Duration) (bool, int, error) {
+	key = strings.TrimSpace(key)
+	if key == "" || limit <= 0 {
+		return true, 0, nil
+	}
+	if window <= 0 {
+		window = 60 * time.Second
+	}
+	return allow("ratelimit:"+key, limit, window)
+}
+
+func allow(name string, limit int, window time.Duration) (bool, int, error) {
+	key := name
 	client := Client()
 	if client == nil {
 		logger.Persistent("redis.ratelimit", 3, 10*time.Minute, "RateLimiter: redis unavailable, allowing request key=%s", key)
 		return true, 0, nil
 	}
 
-	res, err := rateScript.Run(Ctx, client, []string{Key("ratelimit:public:" + key)}, cfg.Window.Milliseconds()).Result()
+	res, err := rateScript.Run(Ctx, client, []string{Key(name)}, window.Milliseconds()).Result()
 	if err != nil {
 		logger.Persistent("redis.ratelimit", 3, 10*time.Minute, "RateLimiter: script failed, allowing request key=%s err=%v", key, err)
 		return true, 0, err
@@ -76,7 +92,7 @@ func AllowPublic(key string) (bool, int, error) {
 	}
 	count := toInt64(arr[0])
 	ttlMs := toInt64(arr[1])
-	if count <= int64(cfg.Limit) {
+	if count <= int64(limit) {
 		return true, 0, nil
 	}
 	retryAfter := int(math.Ceil(float64(ttlMs) / 1000.0))
