@@ -166,7 +166,8 @@ type apiResponse struct {
 	ErrorCode   int             `json:"error_code"`
 	Description string          `json:"description"`
 	Parameters  struct {
-		RetryAfter int `json:"retry_after"`
+		RetryAfter      int   `json:"retry_after"`
+		MigrateToChatID int64 `json:"migrate_to_chat_id"`
 	} `json:"parameters"`
 }
 
@@ -211,7 +212,7 @@ func (b *Bot) callResult(ctx context.Context, method string, payload any) (json.
 		if out.ErrorCode == http.StatusTooManyRequests {
 			return nil, rateLimitedError{wait: time.Duration(out.Parameters.RetryAfter) * time.Second}
 		}
-		return nil, &APIError{Method: method, Code: out.ErrorCode, Description: out.Description}
+		return nil, &APIError{Method: method, Code: out.ErrorCode, Description: out.Description, MigrateToChatID: out.Parameters.MigrateToChatID}
 	}
 	return out.Result, nil
 }
@@ -501,15 +502,16 @@ func (b *Bot) SendFile(ctx context.Context, chatID, method, field, filePath, cap
 		return fmt.Errorf("telegram %s: bad response status %d", method, resp.StatusCode)
 	}
 	if !out.OK {
-		return &APIError{Method: method, Code: out.ErrorCode, Description: out.Description}
+		return &APIError{Method: method, Code: out.ErrorCode, Description: out.Description, MigrateToChatID: out.Parameters.MigrateToChatID}
 	}
 	return nil
 }
 
 type APIError struct {
-	Method      string
-	Code        int
-	Description string
+	Method          string
+	Code            int
+	Description     string
+	MigrateToChatID int64
 }
 
 func (e *APIError) Error() string {
@@ -562,4 +564,23 @@ func (b *Bot) GetChat(ctx context.Context, chatID string) (ChatInfo, error) {
 		return ChatInfo{}, fmt.Errorf("telegram getChat %s: bad result: %w", chatID, err)
 	}
 	return info, nil
+}
+
+func (b *Bot) SendPayload(ctx context.Context, chatID string, payload map[string]any) (int64, error) {
+	payload["chat_id"] = chatID
+	raw, err := b.sendPaced(ctx, chatID, "sendMessage", payload)
+	if err != nil {
+		return 0, err
+	}
+	var msg struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return 0, fmt.Errorf("telegram sendMessage: bad result: %w", err)
+	}
+	return msg.MessageID, nil
+}
+
+func (b *Bot) SendHTMLRaw(ctx context.Context, chatID, text string) error {
+	return b.SendWithMode(ctx, chatID, text, "HTML")
 }
