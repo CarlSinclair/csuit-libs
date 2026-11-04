@@ -82,6 +82,7 @@ type TelegramTask struct {
 	EnqueuedAt time.Time `json:"enqueued_at"`
 	Attempts   int       `json:"attempts"`
 	MaxRetries int       `json:"max_retries"`
+	BotRef     string    `json:"bot_ref,omitempty"`
 }
 
 func requireRedis(operation, queueName string) error {

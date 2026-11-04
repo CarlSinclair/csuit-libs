@@ -74,7 +74,21 @@ func queueFor(token string) *tokenQueue {
 }
 
 func For(token string) *Bot {
-	return queueFor(token).bot
+	q := queueFor(token)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.bot
+}
+
+func Use(b *Bot) *Bot {
+	if b == nil || strings.TrimSpace(b.Token) == "" {
+		return b
+	}
+	q := queueFor(b.Token)
+	q.mu.Lock()
+	q.bot = b
+	q.mu.Unlock()
+	return b
 }
 
 func Submit(token string, job Job) error {
@@ -194,7 +208,10 @@ func (q *tokenQueue) loop(token string) {
 
 func (q *tokenQueue) run(token string, it *item) {
 	ctx, cancel := context.WithTimeout(context.Background(), queueJobTimeout)
-	err := it.job.Run(ctx, q.bot)
+	q.mu.Lock()
+	bot := q.bot
+	q.mu.Unlock()
+	err := it.job.Run(ctx, bot)
 	cancel()
 	if err != nil && IsTransient(err) && it.attempts+1 < queueMaxAttempts {
 		delay := retryDelays[min(it.attempts, len(retryDelays)-1)]
