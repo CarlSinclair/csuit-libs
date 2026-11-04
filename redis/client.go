@@ -71,7 +71,10 @@ func readSettings(addrOverride string) (Settings, error) {
 	if s.DB < 0 {
 		return Settings{}, fmt.Errorf("redis db %d is invalid", s.DB)
 	}
-	s.Prefix = o.DefaultPrefix + strings.TrimSpace(s.Prefix)
+	s.Prefix = strings.TrimSpace(s.Prefix)
+	if s.Prefix == "" {
+		s.Prefix = o.DefaultPrefix
+	}
 	return s, nil
 }
 
