@@ -29,3 +29,6 @@
 !/session/*.go
 !/sqlretry/*.go
 !/telegram/*.go
+!/telegram/durable/
+/telegram/durable/*
+!/telegram/durable/*.go

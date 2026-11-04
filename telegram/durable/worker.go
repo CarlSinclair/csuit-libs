@@ -1,4 +1,4 @@
-package telegram
+package durable
 
 import (
 	"context"
@@ -9,7 +9,10 @@ import (
 
 	"github.com/CarlSinclair/csuit-libs/logger"
 	"github.com/CarlSinclair/csuit-libs/redis"
+	"github.com/CarlSinclair/csuit-libs/telegram"
 )
+
+const maxAttempts = 4
 
 type WorkerConfig struct {
 	TokenFor func(botRef string) string
@@ -28,7 +31,7 @@ func Enqueue(botRef, chatID, message, parseMode string) error {
 		Message:    message,
 		ParseMode:  parseMode,
 		EnqueuedAt: time.Now(),
-		MaxRetries: queueMaxAttempts,
+		MaxRetries: maxAttempts,
 		BotRef:     botRef,
 	})
 }
@@ -113,9 +116,9 @@ func runWorker(cfg WorkerConfig) {
 }
 
 func submit(token string, task redis.TelegramTask, payload []byte) {
-	job := Job{
+	job := telegram.Job{
 		Op: "worker send chat=" + task.ChatID,
-		Run: func(ctx context.Context, b *Bot) error {
+		Run: func(ctx context.Context, b *telegram.Bot) error {
 			return b.SendWithMode(ctx, task.ChatID, task.Message, task.ParseMode)
 		},
 		Done: func(sendErr error) {
@@ -130,8 +133,8 @@ func submit(token string, task redis.TelegramTask, payload []byte) {
 		},
 	}
 	for {
-		err := Submit(token, job)
-		if errors.Is(err, ErrQueueFull) {
+		err := telegram.Submit(token, job)
+		if errors.Is(err, telegram.ErrQueueFull) {
 			time.Sleep(time.Second)
 			continue
 		}

@@ -249,7 +249,12 @@ func Diagnostics() string {
 }
 
 func Close() {
-	if c := Client(); c != nil {
+	redisMu.Lock()
+	c := RDB
+	RDB = nil
+	activeAddr = ""
+	redisMu.Unlock()
+	if c != nil {
 		if err := c.Close(); err != nil {
 			logger.Warn("Redis Close: closing client failed: %v", err)
 		}

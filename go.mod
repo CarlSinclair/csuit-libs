@@ -3,6 +3,7 @@ module github.com/CarlSinclair/csuit-libs
 go 1.26.0
 
 require (
+	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/getsentry/sentry-go v0.48.0
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.17.3
@@ -17,6 +18,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
