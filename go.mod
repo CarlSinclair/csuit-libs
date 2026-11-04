@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/getsentry/sentry-go v0.48.0
 	github.com/google/uuid v1.6.0
-	github.com/redis/go-redis/v9 v9.17.2
+	github.com/redis/go-redis/v9 v9.17.3
 	modernc.org/sqlite v1.42.2
 )
 
