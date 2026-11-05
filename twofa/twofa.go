@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"image/png"
 	"strings"
+	"time"
 
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -46,3 +48,18 @@ func QRDataURL(issuer, secret, account string) (string, error) {
 
 // Verify checks a code against a plaintext base32 secret.
 func Verify(secret, code string) bool { return totp.Validate(code, secret) }
+
+// VerifyStep checks a code like Verify and also returns the 30-second step it
+// matched. Store the step per user and accept only a larger one next time, so
+// a code cannot be used twice inside its validity window.
+func VerifyStep(secret, code string, now time.Time) (int64, bool) {
+	code = strings.ReplaceAll(strings.TrimSpace(code), " ", "")
+	for _, off := range []int{0, -1, 1} {
+		t := now.Add(time.Duration(off) * 30 * time.Second)
+		ok, err := totp.ValidateCustom(code, secret, t, totp.ValidateOpts{Period: 30, Skew: 0, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
+		if err == nil && ok {
+			return t.Unix() / 30, true
+		}
+	}
+	return 0, false
+}
