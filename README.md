@@ -13,6 +13,9 @@ Requires Go 1.26 or newer.
 - redis: client, queues, disk spool, email worker pool, rate limiting, delivery status, and a reliable queue (at-least-once delivery with a processing list and crash recovery)
 - redisadmin: queue and key inspection helpers for operator pages
 - secretbox: authenticated encryption for stored secrets (XChaCha20-Poly1305, HKDF-SHA256 per label, key IDs for rotation); also reads the legacy `enc:v1:` AES-GCM format
+- validate: email and username checks, password strength rules, bcrypt hashing with a two-at-once limit
+- twofa: TOTP secrets, setup QR codes and code verification
+- authkit: hashed one-time tokens, recovery codes, HS256 JWT sign/verify, the 2FA-pending token and HMAC payload signatures (no database access)
 - session: database-backed sessions with a Redis cache
 - sqlretry: retries for transient SQLite errors
 - telegram: Bot API client with pacing, retry handling, token validation (`GetMe`) and login verification, plus one in-memory send queue per bot token

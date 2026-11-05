@@ -1,0 +1,30 @@
+package twofa
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/pquerna/otp/totp"
+)
+
+func TestSecretQRAndVerify(t *testing.T) {
+	secret, err := NewSecret("Test", "a@b.co")
+	if err != nil || secret == "" {
+		t.Fatalf("secret: %q %v", secret, err)
+	}
+	url, err := QRDataURL("Test", secret, "a@b.co")
+	if err != nil || !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Fatalf("qr: %v", err)
+	}
+	code, err := totp.GenerateCode(secret, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !Verify(secret, code) || Verify(secret, "000000") && code != "000000" {
+		t.Error("verify wrong")
+	}
+	if _, err := QRDataURL("Test", "not base32!!", "a@b.co"); err == nil {
+		t.Error("bad secret should fail")
+	}
+}

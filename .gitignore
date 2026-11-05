@@ -33,3 +33,12 @@
 !/telegram/durable/
 /telegram/durable/*
 !/telegram/durable/*.go
+!/authkit/
+/authkit/*
+!/authkit/*.go
+!/twofa/
+/twofa/*
+!/twofa/*.go
+!/validate/
+/validate/*
+!/validate/*.go
