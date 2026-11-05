@@ -64,3 +64,10 @@ func TestPayloadAndSecret(t *testing.T) {
 		t.Error("CheckSecret wrong")
 	}
 }
+
+func TestDeviceTag(t *testing.T) {
+	a, b := DeviceTag("Mozilla/5.0 A"), DeviceTag("Mozilla/5.0 B")
+	if len(a) != 16 || a == b || a != DeviceTag("Mozilla/5.0 A") {
+		t.Fatalf("device tag unstable or colliding: %s %s", a, b)
+	}
+}

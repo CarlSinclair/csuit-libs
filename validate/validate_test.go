@@ -36,3 +36,8 @@ func TestHashRoundTrip(t *testing.T) {
 		t.Error("hash check wrong")
 	}
 }
+
+func TestBurnPasswordCheckDoesNotPanic(t *testing.T) {
+	BurnPasswordCheck("anything")
+	BurnPasswordCheck("")
+}

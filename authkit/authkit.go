@@ -157,3 +157,8 @@ func SignPayload(secret, body string) string {
 func VerifyPayload(secret, body, signature string) bool {
 	return subtle.ConstantTimeCompare([]byte(SignPayload(secret, body)), []byte(signature)) == 1
 }
+
+func DeviceTag(userAgent string) string {
+	sum := sha256.Sum256([]byte(userAgent))
+	return hex.EncodeToString(sum[:8])
+}

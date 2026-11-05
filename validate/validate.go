@@ -6,6 +6,7 @@ package validate
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -50,6 +51,28 @@ func CheckPasswordHash(password, hash string) bool {
 	release := acquireBcryptSlot()
 	defer release()
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+var (
+	dummyOnce sync.Once
+	dummyHash string
+)
+
+// BurnPasswordCheck spends the same time as a real password check. Call it
+// when the account does not exist so login timing does not reveal which
+// emails are registered.
+func BurnPasswordCheck(password string) {
+	dummyOnce.Do(func() {
+		h, err := HashPassword("csuit-dummy-password")
+		if err != nil {
+			logger.Error("validate: could not build the dummy password hash: %v", err)
+			return
+		}
+		dummyHash = h
+	})
+	if dummyHash != "" {
+		CheckPasswordHash(password, dummyHash)
+	}
 }
 
 func PasswordsMatch(p1, p2 string) bool { return p1 == p2 }
