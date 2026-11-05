@@ -14,7 +14,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const BcryptCost = 12
+// BcryptCost is the work factor for new hashes. Tests may lower it.
+var BcryptCost = 12
 
 var (
 	emailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}$`)
