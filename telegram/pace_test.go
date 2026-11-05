@@ -19,7 +19,7 @@ func TestSendMessagePacesAndRetriesRateLimit(t *testing.T) {
 		w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	b := New("123456:ABC-token", "tvt_bot", "s")
+	b := New("123456:ABC-token", "test_bot", "s")
 	b.API = srv.URL
 	start := time.Now()
 	if err := b.SendMessage(context.Background(), "42", "hi"); err != nil {

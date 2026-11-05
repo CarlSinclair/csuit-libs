@@ -34,7 +34,7 @@ func signed(token string, fields map[string]string) url.Values {
 }
 
 func TestVerifyLogin(t *testing.T) {
-	b := New("123456:ABC-token", "tvt_bot", "s3cret")
+	b := New("123456:ABC-token", "test_bot", "s3cret")
 	fresh := strconv.FormatInt(time.Now().Unix(), 10)
 	v := signed(b.Token, map[string]string{"id": "42", "first_name": "Ann", "username": "ann", "auth_date": fresh})
 	got, err := b.VerifyLogin(v)
@@ -65,7 +65,7 @@ func TestVerifyLogin(t *testing.T) {
 func TestParseCommand(t *testing.T) {
 	cases := map[string][2]string{
 		"/start abc":       {"/start", "abc"},
-		"/start@TVT_bot x": {"/start", "x"},
+		"/start@Test_bot x": {"/start", "x"},
 		"/START":           {"/start", ""},
 		"hello":            {"", ""},
 		"":                 {"", ""},

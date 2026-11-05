@@ -1,6 +1,6 @@
 # CSuit-libs
 
-Shared Go packages used across the CSuit products (CShop, CTime, CBots and TVT).
+Shared Go packages for web apps and Telegram bots.
 
     go get github.com/CarlSinclair/csuit-libs@v1.0.0
 
