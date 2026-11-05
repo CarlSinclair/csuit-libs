@@ -25,8 +25,9 @@ type Store interface {
 }
 
 type Manager struct {
-	Store    Store
-	CacheTTL time.Duration
+	Store         Store
+	CacheTTL      time.Duration
+	CacheDisabled bool
 }
 
 func (m *Manager) ttl() time.Duration {
@@ -48,7 +49,7 @@ func (m *Manager) Valid(ctx context.Context, userID int64, sid string) (bool, er
 	}
 	want := strconv.FormatInt(userID, 10)
 
-	if client := redis.Client(); client != nil {
+	if client := redis.Client(); client != nil && !m.CacheDisabled {
 		vals, err := client.MGet(ctx, revokedKey(sid), aliveKey(sid)).Result()
 		if err != nil {
 			logger.Persistent("session.cache.read", 3, 10*time.Minute, "Session cache read failed, using database sid=%s err=%v", sid, err)
@@ -75,7 +76,7 @@ func (m *Manager) Valid(ctx context.Context, userID int64, sid string) (bool, er
 
 func (m *Manager) cache(ctx context.Context, userID int64, sid string) {
 	client := redis.Client()
-	if client == nil {
+	if client == nil || m.CacheDisabled {
 		return
 	}
 	if err := client.Set(ctx, aliveKey(sid), strconv.FormatInt(userID, 10), m.ttl()).Err(); err != nil {
@@ -130,6 +131,9 @@ func (m *Manager) RevokeAll(ctx context.Context, userID int64, except string) er
 }
 
 func (m *Manager) mark(ctx context.Context, sid string) error {
+	if m.CacheDisabled {
+		return nil
+	}
 	client := redis.Client()
 	if client == nil {
 		return errors.New("redis unavailable")

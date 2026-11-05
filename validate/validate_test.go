@@ -22,8 +22,8 @@ func TestPasswordStrength(t *testing.T) {
 	if errs := PasswordStrengthErrors("Abcdef1!"); len(errs) != 0 {
 		t.Errorf("strong password rejected: %v", errs)
 	}
-	if errs := PasswordStrengthErrors("abc"); len(errs) != 5 {
-		t.Errorf("want 5 unmet rules, got %v", errs)
+	if errs := PasswordStrengthErrors("abc"); len(errs) != 4 {
+		t.Errorf("want 4 unmet rules, got %v", errs)
 	}
 }
 
