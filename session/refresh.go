@@ -136,7 +136,7 @@ func (r *Refresher) Refresh(ctx context.Context, presentedHash string, sameDevic
 	logger.Warn("SESSION superseded refresh token reused outside grace uid=%d, revoking all sessions", rec.UserID)
 	if err := r.Sessions.RevokeAll(context.WithoutCancel(ctx), rec.UserID, ""); err != nil {
 		logger.Error("SESSION revoke after refresh reuse uid=%d: %v", rec.UserID, err)
-		return Outcome{}, fmt.Errorf("revoke sessions after refresh reuse uid=%d: %w", rec.UserID, err)
+		return Outcome{}, errors.Join(ErrRefreshReused, fmt.Errorf("revoke sessions after refresh reuse uid=%d: %w", rec.UserID, err))
 	}
 	return Outcome{}, ErrRefreshReused
 }

@@ -219,3 +219,24 @@ func TestRefreshWithinGraceIsAbsorbed(t *testing.T) {
 		t.Fatalf("got %+v %v", out, err)
 	}
 }
+
+type failingRevokeStore struct{ fakeStore }
+
+func (f *failingRevokeStore) RevokeAll(_ context.Context, _ int64, _ string) ([]string, error) {
+	return nil, errors.New("database is locked")
+}
+
+func TestRefreshReuseStillRejectsWhenRevocationFails(t *testing.T) {
+	fr := &fakeRefresh{rows: map[string]*fakeRow{
+		"old": {uid: 1, sid: "s1", supersedAt: time.Now().Add(-5 * time.Minute), by: "new"},
+		"new": {uid: 1, sid: "s1"},
+	}}
+	r := &Refresher{Store: fr, Sessions: &Manager{Store: &failingRevokeStore{}, CacheDisabled: true}}
+	_, err := r.Refresh(context.Background(), "old", no, mintFn)
+	if !errors.Is(err, ErrRefreshReused) {
+		t.Fatalf("the stale token must still be rejected as reused: %v", err)
+	}
+	if err.Error() == ErrRefreshReused.Error() {
+		t.Fatal("the revocation failure must stay visible in the error")
+	}
+}
