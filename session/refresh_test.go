@@ -130,7 +130,7 @@ func TestRefreshConcurrentSingleWinner(t *testing.T) {
 	}
 }
 
-func TestRefreshReuseOutsideGraceRevokesAll(t *testing.T) {
+func TestRefreshReuseOutsideGraceRevokesOnlyThatSession(t *testing.T) {
 	r, _, st := newRefresher(map[string]*fakeRow{
 		"old": {uid: 1, sid: "s1", supersedAt: time.Now().Add(-5 * time.Minute), by: "new"},
 		"new": {uid: 1, sid: "s1"},
@@ -139,8 +139,11 @@ func TestRefreshReuseOutsideGraceRevokesAll(t *testing.T) {
 	if !errors.Is(err, ErrRefreshReused) {
 		t.Fatalf("want reuse error, got %v", err)
 	}
-	if len(st.alive) != 1 || st.alive["o"] != 2 {
-		t.Fatalf("only the other user's session should survive: %v", st.alive)
+	if _, ok := st.alive["s1"]; ok {
+		t.Fatalf("the reused session s1 should be revoked: %v", st.alive)
+	}
+	if st.alive["s2"] != 1 || st.alive["o"] != 2 {
+		t.Fatalf("sessions s2 and o should survive: %v", st.alive)
 	}
 }
 
@@ -222,8 +225,8 @@ func TestRefreshWithinGraceIsAbsorbed(t *testing.T) {
 
 type failingRevokeStore struct{ fakeStore }
 
-func (f *failingRevokeStore) RevokeAll(_ context.Context, _ int64, _ string) ([]string, error) {
-	return nil, errors.New("database is locked")
+func (f *failingRevokeStore) Revoke(_ context.Context, _ int64, _ string) error {
+	return errors.New("database is locked")
 }
 
 func TestRefreshReuseStillRejectsWhenRevocationFails(t *testing.T) {

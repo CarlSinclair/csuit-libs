@@ -12,7 +12,7 @@ import (
 var (
 	ErrRefreshNotFound = errors.New("session: refresh token not found")
 	ErrRefreshInvalid  = errors.New("session: refresh token is not valid")
-	ErrRefreshReused   = errors.New("session: superseded refresh token reused, sessions revoked")
+	ErrRefreshReused   = errors.New("session: superseded refresh token reused, session revoked")
 )
 
 const (
@@ -133,10 +133,10 @@ func (r *Refresher) Refresh(ctx context.Context, presentedHash string, sameDevic
 	if healed {
 		return out, nil
 	}
-	logger.Warn("SESSION superseded refresh token reused outside grace uid=%d, revoking all sessions", rec.UserID)
-	if err := r.Sessions.RevokeAll(context.WithoutCancel(ctx), rec.UserID, ""); err != nil {
-		logger.Error("SESSION revoke after refresh reuse uid=%d: %v", rec.UserID, err)
-		return Outcome{}, errors.Join(ErrRefreshReused, fmt.Errorf("revoke sessions after refresh reuse uid=%d: %w", rec.UserID, err))
+	logger.Warn("SESSION superseded refresh token reused outside grace uid=%d sid=%s, revoking that session", rec.UserID, rec.SID)
+	if err := r.Sessions.Revoke(context.WithoutCancel(ctx), rec.UserID, rec.SID); err != nil {
+		logger.Error("SESSION revoke after refresh reuse uid=%d sid=%s: %v", rec.UserID, rec.SID, err)
+		return Outcome{}, errors.Join(ErrRefreshReused, fmt.Errorf("revoke session after refresh reuse uid=%d sid=%s: %w", rec.UserID, rec.SID, err))
 	}
 	return Outcome{}, ErrRefreshReused
 }
