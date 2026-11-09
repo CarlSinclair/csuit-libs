@@ -10,6 +10,7 @@ Requires Go 1.26 or newer.
 
 - logger: leveled logging, secret and IP-to-location redaction, Sentry, Telegram alerts, persistent-failure and retry helpers
 - mailer: SMTP delivery with STARTTLS, header sanitizing, attachments, text direction
+- emailkit: shared HTML email layout (brand header, card, standard copyright footer), block helpers, and a theme with a fixed default palette or merchant overrides
 - redis: client, queues, disk spool, email worker pool, rate limiting, delivery status, and a reliable queue (at-least-once delivery with a processing list and crash recovery)
 - redisadmin: queue and key inspection helpers for operator pages
 - secretbox: authenticated encryption for stored secrets (XChaCha20-Poly1305, HKDF-SHA256 per label, key IDs for rotation); also reads the legacy `enc:v1:` AES-GCM format

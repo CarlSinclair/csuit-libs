@@ -107,3 +107,23 @@ func MissingKey(key string) {
 	}
 	Warn("Lookup of non-key text ignored (len=%d)", len(key))
 }
+
+func WriteFailed(what string, err error, r *http.Request, detail string) {
+	if err == nil {
+		return
+	}
+	if !IsClientGone(err) {
+		Error("Response write failed [%s]: %v %s", what, err, detail)
+		return
+	}
+	if r != nil {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			Error("Response lost to disconnected client after %s [%s]: %v path=%s %s", r.Method, what, err, r.URL.Path, detail)
+			return
+		}
+	}
+	Persistent("client-write:"+what, clientGoneAlertHits, clientGoneAlertWindow,
+		"client gone while writing [%s]: %v %s", what, err, detail)
+}

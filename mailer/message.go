@@ -23,6 +23,7 @@ type Attachment struct {
 	Filename    string
 	ContentType string
 	Content     []byte
+	ContentID   string
 }
 
 type Message struct {
@@ -143,6 +144,40 @@ func writeBody(buf *bytes.Buffer, m Message) error {
 	return nil
 }
 
+func writeBodyWithInline(buf *bytes.Buffer, m Message, inline []Attachment) error {
+	if len(inline) == 0 {
+		return writeBody(buf, m)
+	}
+	boundary, err := randomHex(16)
+	if err != nil {
+		return err
+	}
+	writeHeader(buf, "Content-Type", "multipart/related; boundary="+boundary)
+	buf.WriteString("\r\n--" + boundary + "\r\n")
+	if err := writeBody(buf, m); err != nil {
+		return err
+	}
+	for _, a := range inline {
+		if len(a.Content) == 0 {
+			return fmt.Errorf("inline attachment %q is empty", a.Filename)
+		}
+		ctype := "application/octet-stream"
+		if mt, _, perr := mime.ParseMediaType(SanitizeHeaderValue(a.ContentType)); perr == nil && mt != "" {
+			ctype = mt
+		}
+		name := cleanFilename(a.Filename)
+		buf.WriteString("--" + boundary + "\r\n")
+		writeHeader(buf, "Content-Type", mime.FormatMediaType(ctype, map[string]string{"name": name}))
+		writeHeader(buf, "Content-ID", "<"+SanitizeHeaderValue(a.ContentID)+">")
+		writeHeader(buf, "Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
+		writeHeader(buf, "Content-Transfer-Encoding", "base64")
+		buf.WriteString("\r\n")
+		writeBase64(buf, a.Content)
+	}
+	buf.WriteString("--" + boundary + "--\r\n")
+	return nil
+}
+
 func (m Message) Build(now time.Time) (raw []byte, envelopeFrom, envelopeTo string, err error) {
 	to, err := ValidateAddress(m.To)
 	if err != nil {
@@ -181,8 +216,17 @@ func (m Message) Build(now time.Time) (raw []byte, envelopeFrom, envelopeTo stri
 	writeHeader(&buf, "Message-ID", "<"+idPart+"@"+domain+">")
 	writeHeader(&buf, "MIME-Version", "1.0")
 
-	if len(m.Attachments) == 0 {
-		if err := writeBody(&buf, m); err != nil {
+	var inline, regular []Attachment
+	for _, a := range m.Attachments {
+		if strings.TrimSpace(a.ContentID) != "" {
+			inline = append(inline, a)
+		} else {
+			regular = append(regular, a)
+		}
+	}
+
+	if len(regular) == 0 {
+		if err := writeBodyWithInline(&buf, m, inline); err != nil {
 			return nil, "", "", fail("body", err)
 		}
 		return buf.Bytes(), from, to, nil
@@ -194,10 +238,10 @@ func (m Message) Build(now time.Time) (raw []byte, envelopeFrom, envelopeTo stri
 	}
 	writeHeader(&buf, "Content-Type", "multipart/mixed; boundary="+boundary)
 	buf.WriteString("\r\n--" + boundary + "\r\n")
-	if err := writeBody(&buf, m); err != nil {
+	if err := writeBodyWithInline(&buf, m, inline); err != nil {
 		return nil, "", "", fail("body", err)
 	}
-	for _, a := range m.Attachments {
+	for _, a := range regular {
 		if len(a.Content) == 0 {
 			return nil, "", "", invalid("attachment", fmt.Errorf("attachment %q is empty", a.Filename))
 		}
