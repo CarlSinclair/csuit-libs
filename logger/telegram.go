@@ -68,7 +68,11 @@ func SendTelegramMessageSync(message string) {
 		return
 	}
 
-	sendTelegramSync(chatID, formatTelegramAlert(message), "MarkdownV2")
+	gated, ok := alertGate(message, alertExactKey(message), true)
+	if !ok {
+		return
+	}
+	sendTelegramSync(chatID, formatTelegramAlert(gated), "MarkdownV2")
 }
 
 func SendToUserSync(chatID string, message string) {
@@ -162,27 +166,14 @@ func sendTelegramSync(chatID, message, parseMode string) {
 }
 
 const (
-	telegramDedupWindow  = 45 * time.Second
-	telegramMinInterval  = 2 * time.Second
-	telegramRetryCap     = 60 * time.Second
-	telegramQueueDepth   = 128
-	telegramMaxDedupKeys = 1000
+	telegramMinInterval = 2 * time.Second
+	telegramRetryCap    = 60 * time.Second
+	telegramQueueDepth  = 128
 )
-
-type telegramDedupEntry struct {
-	first  time.Time
-	count  int
-	sample string
-}
 
 var (
 	telegramQueue     chan string
 	telegramQueueOnce sync.Once
-
-	telegramSeenMu sync.Mutex
-	telegramSeen   = map[[32]byte]*telegramDedupEntry{}
-
-	telegramDropped int64
 )
 
 func postTelegramRetry(chatID, message, parseMode string, maxWait time.Duration) (bool, string) {
@@ -245,27 +236,16 @@ func enqueueAlertUnfiltered(message, alertKey string) {
 		go telegramSender()
 	})
 
-	key := telegramDedupKey(message)
-	if alertKey != "" {
-		key = sha256.Sum256([]byte("key:" + alertKey))
-	}
-	now := time.Now()
-
-	telegramSeenMu.Lock()
-	if e := telegramSeen[key]; e != nil && now.Sub(e.first) < telegramDedupWindow {
-		e.count++
-		telegramSeenMu.Unlock()
+	gated, ok := alertGate(message, alertCollapsedKey(message, alertKey), false)
+	if !ok {
 		return
 	}
-	if len(telegramSeen) < telegramMaxDedupKeys {
-		telegramSeen[key] = &telegramDedupEntry{first: now, count: 1, sample: message}
-	}
-	telegramSeenMu.Unlock()
+	message = gated
 
 	select {
 	case telegramQueue <- message:
 	default:
-		atomic.AddInt64(&telegramDropped, 1)
+		go func() { telegramQueue <- message }()
 	}
 }
 
@@ -303,33 +283,13 @@ func telegramSender() {
 	for {
 		select {
 		case msg := <-telegramQueue:
-			if dropped := atomic.SwapInt64(&telegramDropped, 0); dropped > 0 {
-				send(fmt.Sprintf("[logger] %d further alert(s) dropped - Telegram send backlog", dropped))
-			}
 			send(msg)
 		case <-sweep.C:
-			for _, summary := range telegramFlushExpiredDupes() {
+			for _, summary := range alertSweep() {
 				send(summary)
 			}
 		}
 	}
-}
-
-func telegramFlushExpiredDupes() []string {
-	now := time.Now()
-	var out []string
-	telegramSeenMu.Lock()
-	for k, e := range telegramSeen {
-		if now.Sub(e.first) < telegramDedupWindow {
-			continue
-		}
-		if e.count > 1 {
-			out = append(out, fmt.Sprintf("%s\n\n(repeated %d times in the last %s)", e.sample, e.count-1, telegramDedupWindow))
-		}
-		delete(telegramSeen, k)
-	}
-	telegramSeenMu.Unlock()
-	return out
 }
 
 var telegramCallSiteRe = regexp.MustCompile(`^\S+ \S+ (\[[^\]]*\] \S+:[0-9]+ [A-Z]+):( PERSISTENT \S+)?`)

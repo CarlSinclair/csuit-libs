@@ -142,20 +142,20 @@ func (l *AppLogger) logCore(level LogLevel, skip int, alertKey string, format st
 
 	msg := fmt.Sprintf(format, v...)
 
-	if level >= LevelWarn && alertSuppressed(msg) {
+	suppressed := level >= LevelWarn && alertSuppressed(msg)
+	if suppressed {
 		atomic.AddInt64(&outageDropped, 1)
-		return
 	}
 
 	formattedLog := l.formatter(level, shortFile, line, msg)
 
 	l.logger.Output(2, formattedLog)
 
-	if level >= LevelError {
+	if level >= LevelError && !suppressed {
 		enqueueTelegramAlert(formattedLog, alertKey)
 	}
 
-	if level >= LevelError {
+	if level >= LevelError && !suppressed {
 		SentryCapture(level, formattedLog)
 	} else {
 		SentryBreadcrumb(level, formattedLog)

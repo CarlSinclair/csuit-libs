@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CarlSinclair/csuit-libs/demoegress"
 	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
@@ -31,7 +32,7 @@ var (
 	ErrBadLogin      = errors.New("telegram login data is invalid or expired")
 )
 
-const defaultAPIBase = "https://api.telegram.org"
+var ErrNoProxyBase = errors.New("telegram proxy base is not configured")
 
 type Bot struct {
 	Token    string
@@ -68,7 +69,7 @@ func (b *Bot) base() string {
 	if v := logger.TelegramBase(); v != "" {
 		return v
 	}
-	return defaultAPIBase
+	return ""
 }
 
 func (b *Bot) Configured() bool { return b != nil && b.Token != "" && b.Username != "" }
@@ -190,7 +191,11 @@ func (b *Bot) callResult(ctx context.Context, method string, payload any) (json.
 	if err != nil {
 		return nil, fmt.Errorf("telegram %s marshal: %w", method, err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.base()+"/bot"+b.Token+"/"+method, bytes.NewReader(body))
+	base := b.base()
+	if base == "" {
+		return nil, ErrNoProxyBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/bot"+b.Token+"/"+method, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("telegram %s request: %w", method, err)
 	}
@@ -399,7 +404,11 @@ func (b *Bot) GetMe(ctx context.Context) (BotInfo, error) {
 	if b == nil || strings.TrimSpace(b.Token) == "" {
 		return BotInfo{}, ErrNotConfigured
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.base()+"/bot"+b.Token+"/getMe", nil)
+	base := b.base()
+	if base == "" {
+		return BotInfo{}, ErrNoProxyBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/bot"+b.Token+"/getMe", nil)
 	if err != nil {
 		return BotInfo{}, fmt.Errorf("telegram getMe request: %w", err)
 	}
@@ -510,7 +519,11 @@ func (b *Bot) SendFile(ctx context.Context, chatID, method, field, filePath, cap
 	if err := b.pace(ctx, chatID); err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.base()+"/bot"+b.Token+"/"+method, &buf)
+	base := b.base()
+	if base == "" {
+		return ErrNoProxyBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/bot"+b.Token+"/"+method, &buf)
 	if err != nil {
 		return fmt.Errorf("telegram %s request: %w", method, err)
 	}
@@ -561,7 +574,7 @@ func IsTransient(err error) bool {
 	if errors.As(err, &api) {
 		return api.Code >= 500
 	}
-	if errors.Is(err, ErrNotConfigured) || errors.Is(err, ErrBotBlocked) || errors.Is(err, ErrBadLogin) {
+	if errors.Is(err, ErrNotConfigured) || errors.Is(err, ErrNoProxyBase) || errors.Is(err, demoegress.ErrExternalDisabled) || errors.Is(err, ErrBotBlocked) || errors.Is(err, ErrBadLogin) {
 		return false
 	}
 	return true

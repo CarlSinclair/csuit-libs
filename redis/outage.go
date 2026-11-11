@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -40,8 +41,9 @@ func outageLoop() {
 			if outageDown.CompareAndSwap(true, false) {
 				since := time.Unix(0, outageSince.Load())
 				d := time.Since(since).Round(time.Second)
-				logger.Info("Redis outage: recovered addr=%s downtime=%s suppressed_log_lines=%d", ActiveAddr(), d, logger.TakeSuppressedCount())
-				logger.SendStateAlert("redis-outage", "Redis is back up ("+hostLabel()+", down for "+d.String()+")")
+				n := logger.TakeSuppressedCount()
+				logger.Info("Redis outage: recovered addr=%s downtime=%s suppressed_alerts=%d", ActiveAddr(), d, n)
+				logger.SendStateAlert("redis-outage", fmt.Sprintf("Redis is back up (%s, down for %s). %d Redis-related alert(s) were suppressed during the outage; every one is in the journal.", hostLabel(), d, n))
 			}
 			continue
 		}
