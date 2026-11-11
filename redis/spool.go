@@ -23,6 +23,11 @@ var (
 	spoolOnce sync.Once
 )
 
+const (
+	spoolDirMode  os.FileMode = 0o770
+	spoolFileMode os.FileMode = 0o660
+)
+
 func spoolFile() (string, error) {
 	dir, err := logger.AppRootDir()
 	if err != nil {
@@ -42,10 +47,10 @@ func spoolAppend(queueName string, data []byte) error {
 	}
 	spoolMu.Lock()
 	defer spoolMu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), spoolDirMode); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, spoolFileMode)
 	if err != nil {
 		return err
 	}
@@ -112,7 +117,7 @@ func flushSpool() error {
 	}
 	rest := bytes.Join(lines[pushed:], []byte("\n"))
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(rest, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(tmp, append(rest, '\n'), spoolFileMode); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {

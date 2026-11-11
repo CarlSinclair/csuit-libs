@@ -92,7 +92,7 @@ func emailWorkerLoop(id int, send func(EmailTask) error, permanent func(error) b
 		payload, found, err := Dequeue(EmailQueueName, 10*time.Second)
 		if err != nil {
 			logger.Persistent("email.worker.dequeue", 5, 10*time.Minute, "Email Worker: dequeue failed queue=%s err=%v diag=%s", EmailQueueName, err, Diagnostics())
-			time.Sleep(2 * time.Second)
+			Backoff(2 * time.Second)
 			continue
 		}
 		logger.ResetPersistent("email.worker.dequeue")

@@ -198,10 +198,45 @@ func postTelegramRetry(chatID, message, parseMode string, maxWait time.Duration)
 }
 
 func EnqueueTelegramAlert(message string) {
-	enqueueTelegramAlert(message)
+	enqueueTelegramAlert(message, "")
 }
 
-func enqueueTelegramAlert(message string) {
+var (
+	alertFilterMu sync.RWMutex
+	alertFilter   func(message string) bool
+)
+
+var outageDropped int64
+
+func TakeSuppressedCount() int64 {
+	return atomic.SwapInt64(&outageDropped, 0)
+}
+
+func SetAlertSuppressor(f func(message string) bool) {
+	alertFilterMu.Lock()
+	alertFilter = f
+	alertFilterMu.Unlock()
+}
+
+func alertSuppressed(message string) bool {
+	alertFilterMu.RLock()
+	f := alertFilter
+	alertFilterMu.RUnlock()
+	return f != nil && f(message)
+}
+
+func SendStateAlert(stateKey, message string) {
+	enqueueAlertUnfiltered(message, "state:"+stateKey)
+}
+
+func enqueueTelegramAlert(message, alertKey string) {
+	if alertSuppressed(message) {
+		return
+	}
+	enqueueAlertUnfiltered(message, alertKey)
+}
+
+func enqueueAlertUnfiltered(message, alertKey string) {
 	if GetTelegramBotToken() == "" || GetTelegramChatID() == "" {
 		return
 	}
@@ -211,6 +246,9 @@ func enqueueTelegramAlert(message string) {
 	})
 
 	key := telegramDedupKey(message)
+	if alertKey != "" {
+		key = sha256.Sum256([]byte("key:" + alertKey))
+	}
 	now := time.Now()
 
 	telegramSeenMu.Lock()

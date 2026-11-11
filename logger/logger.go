@@ -123,13 +123,17 @@ func createRedactingFormatter() func(level LogLevel, file string, line int, msg 
 }
 
 func (l *AppLogger) logf(level LogLevel, format string, v ...interface{}) {
+	l.logCore(level, 4, "", format, v...)
+}
+
+func (l *AppLogger) logCore(level LogLevel, skip int, alertKey string, format string, v ...interface{}) {
 	if level < l.minLevel {
 		return
 	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	_, file, line, ok := runtime.Caller(3)
+	_, file, line, ok := runtime.Caller(skip)
 	if !ok {
 		file = "???"
 		line = 0
@@ -138,12 +142,17 @@ func (l *AppLogger) logf(level LogLevel, format string, v ...interface{}) {
 
 	msg := fmt.Sprintf(format, v...)
 
+	if level >= LevelWarn && alertSuppressed(msg) {
+		atomic.AddInt64(&outageDropped, 1)
+		return
+	}
+
 	formattedLog := l.formatter(level, shortFile, line, msg)
 
 	l.logger.Output(2, formattedLog)
 
 	if level >= LevelError {
-		enqueueTelegramAlert(formattedLog)
+		enqueueTelegramAlert(formattedLog, alertKey)
 	}
 
 	if level >= LevelError {
@@ -167,6 +176,10 @@ func (l *AppLogger) Warn(format string, v ...interface{}) {
 
 func (l *AppLogger) Error(format string, v ...interface{}) {
 	l.logf(LevelError, format, v...)
+}
+
+func (l *AppLogger) ErrorKeyed(alertKey string, format string, v ...interface{}) {
+	l.logCore(LevelError, 3, alertKey, format, v...)
 }
 
 func (l *AppLogger) Fatal(format string, v ...interface{}) {
@@ -231,6 +244,10 @@ func Error(format string, v ...interface{}) {
 }
 func Fatal(format string, v ...interface{}) {
 	globalAppLogger.Fatal(format, v...)
+}
+
+func ErrorKeyed(alertKey string, format string, v ...interface{}) {
+	globalAppLogger.ErrorKeyed(alertKey, format, v...)
 }
 
 func NewError(format string, v ...interface{}) error {

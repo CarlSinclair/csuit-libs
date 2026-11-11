@@ -86,7 +86,7 @@ func runWorker(cfg WorkerConfig) {
 		payload, found, err := redis.DequeueReliable(redis.TelegramQueueName, 10*time.Second)
 		if err != nil {
 			logger.Persistent("telegram.worker.dequeue", 5, 10*time.Minute, "Telegram worker: dequeue failed queue=%s err=%v", redis.TelegramQueueName, err)
-			time.Sleep(2 * time.Second)
+			redis.Backoff(2 * time.Second)
 			continue
 		}
 		logger.ResetPersistent("telegram.worker.dequeue")

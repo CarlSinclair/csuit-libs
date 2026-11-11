@@ -126,6 +126,7 @@ func connect(s Settings) (*goredis.Client, error) {
 }
 
 func Init(addrOverride string) {
+	StartOutageMonitor()
 	s, err := readSettings(addrOverride)
 	if err != nil {
 		logger.Error("Redis Init: settings unavailable, retrying in background: %v", err)
