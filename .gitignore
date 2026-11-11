@@ -6,6 +6,9 @@
 !/NOTICE
 !/README.md
 !/SECURITY.md
+!/agentnotice/
+/agentnotice/*
+!/agentnotice/*.go
 !/agentkeys/
 /agentkeys/*
 !/agentkeys/*.go
