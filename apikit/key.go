@@ -49,7 +49,7 @@ func ScopesInclude(granted []string, want string) bool {
 	resource, action, _ := strings.Cut(want, ":")
 	for _, g := range granted {
 		g = strings.ToLower(strings.TrimSpace(g))
-		if g == want || g == "*" {
+		if g == want {
 			return true
 		}
 		if action == "read" && g == resource+":write" {

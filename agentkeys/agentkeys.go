@@ -20,11 +20,13 @@ type Key struct {
 	CreatedAt  sql.NullTime
 	LastUsedAt sql.NullTime
 	RevokedAt  sql.NullTime
+	ExpiresAt  sql.NullTime
 }
 
 type Store struct {
 	DB            func() *sql.DB
 	Prefix        string
+	ScopePrefix   string
 	DefaultScopes string
 	NowSQL        string
 }
@@ -52,14 +54,21 @@ func hashKey(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-const columns = `id, key_hash, label, scopes, created_at, last_used_at, revoked_at`
+const columns = `id, key_hash, label, scopes, created_at, last_used_at, revoked_at, expires_at`
 
 func scan(row interface{ Scan(...any) error }) (*Key, error) {
 	var k Key
-	if err := row.Scan(&k.ID, &k.KeyHash, &k.Label, &k.Scopes, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt); err != nil {
+	if err := row.Scan(&k.ID, &k.KeyHash, &k.Label, &k.Scopes, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt, &k.ExpiresAt); err != nil {
 		return nil, err
 	}
 	return &k, nil
+}
+
+func (s *Store) scopeFilter() string {
+	if s.ScopePrefix == "" {
+		return ""
+	}
+	return " AND scopes LIKE '" + strings.ReplaceAll(s.ScopePrefix, "'", "") + "%'"
 }
 
 func (s *Store) Create(label, scopes string) (rawKey string, id int64, err error) {
@@ -76,8 +85,15 @@ func (s *Store) Create(label, scopes string) (rawKey string, id int64, err error
 	if scopes == "" {
 		scopes = s.DefaultScopes
 	}
-	res, err := d.Exec(`INSERT INTO agent_api_keys (key_hash, label, scopes) VALUES (?, ?, ?)`,
-		hashKey(rawKey), strings.TrimSpace(label), scopes)
+	if s.ScopePrefix != "" && !strings.HasPrefix(scopes, s.ScopePrefix) {
+		return "", 0, fmt.Errorf("agent key: scopes %q must start with %q", scopes, s.ScopePrefix)
+	}
+	display := rawKey
+	if len(display) > 12 {
+		display = display[:12]
+	}
+	res, err := d.Exec(`INSERT INTO api_keys (key_hash, key_prefix, label, scopes, created_at) VALUES (?, ?, ?, ?, `+s.now()+`)`,
+		hashKey(rawKey), display, strings.TrimSpace(label), scopes)
 	if err != nil {
 		return "", 0, fmt.Errorf("agent key: insert: %w", err)
 	}
@@ -98,14 +114,14 @@ func (s *Store) Lookup(raw string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	k, err := scan(d.QueryRow(`SELECT `+columns+` FROM agent_api_keys WHERE key_hash = ? AND revoked_at IS NULL`, hashKey(raw)))
+	k, err := scan(d.QueryRow(`SELECT `+columns+` FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > `+s.now()+`)`+s.scopeFilter(), hashKey(raw)))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("agent key: lookup: %w", err)
 	}
-	if _, e := d.Exec(`UPDATE agent_api_keys SET last_used_at = `+s.now()+` WHERE id = ?`, k.ID); e != nil {
+	if _, e := d.Exec(`UPDATE api_keys SET last_used_at = `+s.now()+` WHERE id = ?`, k.ID); e != nil {
 		logger.Warn("LookupAgentKey: touch last_used_at id=%d err=%v", k.ID, e)
 	}
 	return k, nil
@@ -128,7 +144,7 @@ func (s *Store) List() ([]Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := d.Query(`SELECT ` + columns + ` FROM agent_api_keys ORDER BY id DESC`)
+	rows, err := d.Query(`SELECT ` + columns + ` FROM api_keys WHERE created_by = 0` + s.scopeFilter() + ` ORDER BY id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("agent key: list: %w", err)
 	}
@@ -152,7 +168,7 @@ func (s *Store) Revoke(id int64) error {
 	if err != nil {
 		return err
 	}
-	if _, err := d.Exec(`UPDATE agent_api_keys SET revoked_at = `+s.now()+` WHERE id = ? AND revoked_at IS NULL`, id); err != nil {
+	if _, err := d.Exec(`UPDATE api_keys SET revoked_at = `+s.now()+` WHERE id = ? AND revoked_at IS NULL AND created_by = 0`+s.scopeFilter(), id); err != nil {
 		return fmt.Errorf("agent key: revoke id=%d: %w", id, err)
 	}
 	logger.Info("RevokeAgentKey: id=%d", id)

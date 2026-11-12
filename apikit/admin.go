@@ -71,6 +71,7 @@ type OverviewView struct {
 	Keys     []KeyView  `json:"keys"`
 	Webhooks []HookView `json:"webhooks"`
 	Scopes   []string   `json:"scopes"`
+	Presets  []Preset   `json:"presets"`
 	Events   []string   `json:"events"`
 	BaseURL  string     `json:"base_url"`
 }
@@ -120,7 +121,7 @@ func (a *Admin) Overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
-	out := OverviewView{Keys: []KeyView{}, Webhooks: []HookView{}, Scopes: a.AllowedScopes(), Events: a.Events}
+	out := OverviewView{Keys: []KeyView{}, Webhooks: []HookView{}, Scopes: a.AllowedScopes(), Presets: PresetsFor(a.AllowedScopes()), Events: a.Events}
 	for _, k := range keys {
 		out.Keys = append(out.Keys, keyView(k, now))
 	}

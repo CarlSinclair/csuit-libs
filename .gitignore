@@ -124,3 +124,9 @@
 !/telegram/durable/
 /telegram/durable/*
 !/telegram/durable/*.go
+!/mcpkit/
+/mcpkit/*
+!/mcpkit/*.go
+!/helpdesk/
+/helpdesk/*
+!/helpdesk/*.go

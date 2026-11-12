@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CarlSinclair/csuit-libs/apikit"
 	"github.com/CarlSinclair/csuit-libs/logger"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -65,7 +66,45 @@ func database() (*sql.DB, error) {
 const vapidPublicKeySettingKey = "vapid_public_key"
 const vapidPrivateKeySettingKey = "vapid_private_key"
 
-var webpushHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var webpushHTTPClient = apikit.NewSafeClient(func(host string) error {
+	if !pushHostAllowed(host) {
+		return ErrInvalidPushEndpoint
+	}
+	return nil
+})
+
+var pushHostSuffixes = []string{
+	"fcm.googleapis.com",
+	"push.services.mozilla.com",
+	"push.apple.com",
+	"notify.windows.com",
+}
+
+var ErrInvalidPushEndpoint = errors.New("push endpoint is not an https URL on a known push service")
+
+func ValidatePushEndpoint(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Host == "" {
+		return ErrInvalidPushEndpoint
+	}
+	if p := u.Port(); p != "" && p != "443" {
+		return ErrInvalidPushEndpoint
+	}
+	if !pushHostAllowed(u.Hostname()) {
+		return ErrInvalidPushEndpoint
+	}
+	return nil
+}
+
+func pushHostAllowed(host string) bool {
+	host = strings.ToLower(host)
+	for _, suffix := range pushHostSuffixes {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
+}
 
 // PushSubscription is one browser/device's Web Push registration.
 type PushSubscription struct {
@@ -167,6 +206,9 @@ func SavePushSubscription(userID int64, endpoint, p256dh, auth, userAgent string
 	auth = strings.TrimSpace(auth)
 	if userID <= 0 || endpoint == "" || p256dh == "" || auth == "" {
 		return fmt.Errorf("missing required subscription fields")
+	}
+	if err := ValidatePushEndpoint(endpoint); err != nil {
+		return err
 	}
 	d, err := database()
 	if err != nil {
@@ -328,6 +370,14 @@ func SendSessionEndedPush(userID int64) {
 }
 
 func sendWebPush(sub PushSubscription, payload []byte) error {
+	if err := ValidatePushEndpoint(sub.Endpoint); err != nil {
+		if delErr := DeletePushSubscription(sub.UserID, sub.Endpoint); delErr != nil {
+			logger.Error("sendWebPush: removing subscription with invalid endpoint failed user_id=%d err=%v", sub.UserID, delErr)
+		} else {
+			logger.Warn("sendWebPush: removed subscription with invalid endpoint user_id=%d", sub.UserID)
+		}
+		return err
+	}
 	vapidPriv, err := loadVAPIDPrivateKey()
 	if err != nil {
 		return fmt.Errorf("vapid key unavailable: %w", err)

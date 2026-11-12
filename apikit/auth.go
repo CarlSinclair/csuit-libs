@@ -138,3 +138,32 @@ func (a *Authenticator) Wrap(scope string, h HandlerFunc) http.Handler {
 		}
 	})
 }
+
+func (a *Authenticator) failureBudgetLeft(r *http.Request) bool {
+	ip := a.cfg.ClientIP(r)
+	ok, _, err := redis.Allow("apikit:authfail:"+ip, a.cfg.FailLimit, a.cfg.FailWindow)
+	if err != nil {
+		logger.Warn("apikit: auth failure limiter error ip=%s err=%v", ip, err)
+	}
+	return ok
+}
+
+func (a *Authenticator) Principal(r *http.Request) *Key {
+	if a.cfg.Enabled != nil && !a.cfg.Enabled() {
+		return nil
+	}
+	raw := BearerToken(r)
+	if raw == "" {
+		return nil
+	}
+	k, err := a.cfg.Store.Lookup(r.Context(), HashToken(raw))
+	if err != nil {
+		logger.Warn("apikit: principal lookup failed err=%v", err)
+		return nil
+	}
+	if k == nil || k.Revoked() || k.Expired(time.Now()) {
+		a.failureBudgetLeft(r)
+		return nil
+	}
+	return k
+}

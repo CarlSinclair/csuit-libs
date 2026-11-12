@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,12 +32,14 @@ type Op struct {
 	Status     int
 	List       bool
 	Idempotent bool
+	Tool       string
 }
 
 type Registry struct {
 	auth  *Authenticator
 	mount func(method, path string, h http.Handler)
 	ops   []Op
+	hands []http.Handler
 }
 
 func (a *Authenticator) NewRegistry(mount func(method, path string, h http.Handler)) *Registry {
@@ -50,8 +53,11 @@ func (g *Registry) Handle(op Op, h HandlerFunc) {
 	if op.Idempotent && op.Method != http.MethodGet {
 		h = Idempotent(h)
 	}
+	op.Params = withPathParams(op)
+	wrapped := g.auth.Wrap(op.Scope, h)
 	g.ops = append(g.ops, op)
-	g.mount(op.Method, op.Path, g.auth.Wrap(op.Scope, h))
+	g.hands = append(g.hands, wrapped)
+	g.mount(op.Method, op.Path, wrapped)
 }
 
 func (g *Registry) Scopes() []string {
@@ -165,6 +171,8 @@ func statusKey(code int) string { return strconv.Itoa(code) }
 
 var timeType = reflect.TypeOf(time.Time{})
 
+func SchemaOf(v any) map[string]any { return schemaOf(reflect.TypeOf(v), 0) }
+
 func schemaOf(t reflect.Type, depth int) map[string]any {
 	if t == nil || depth > 6 {
 		return map[string]any{}
@@ -217,5 +225,40 @@ func schemaOf(t reflect.Type, depth int) map[string]any {
 		return out
 	default:
 		return map[string]any{}
+	}
+}
+
+var pathVar = regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`)
+
+func withPathParams(op Op) []Param {
+	have := map[string]bool{}
+	for _, p := range op.Params {
+		have[p.Name] = true
+	}
+	out := append([]Param(nil), op.Params...)
+	for _, m := range pathVar.FindAllStringSubmatch(op.Path, -1) {
+		if !have[m[1]] {
+			have[m[1]] = true
+			out = append(out, Param{Name: m[1], In: "path", Required: true})
+		}
+	}
+	return out
+}
+
+func (g *Registry) CheckScopes(declared []string) {
+	known := map[string]bool{}
+	for _, s := range declared {
+		known[s] = true
+	}
+	seen := map[string]bool{}
+	for _, op := range g.ops {
+		s := op.Scope
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		if !known[s] {
+			logger.Error("apikit: scope %q is used by a registered operation but missing from the declared scope list, keys cannot be granted it", s)
+		}
 	}
 }

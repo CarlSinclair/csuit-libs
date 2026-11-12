@@ -93,11 +93,32 @@ func ValidateWebhookURL(raw string) error {
 	return nil
 }
 
-var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
+var blockedNets = mustCIDRs("100.64.0.0/10", "0.0.0.0/8", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4", "64:ff9b::/96", "2002::/16")
+
+func mustCIDRs(cidrs ...string) []*net.IPNet {
+	out := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic("apikit: bad blocked CIDR " + c)
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func inBlockedNets(ip net.IP) bool {
+	for _, n := range blockedNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
 func blockedIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() || cgnat.Contains(ip)
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() || inBlockedNets(ip)
 }
 
 func NewSafeClient(allowHost func(host string) error) *http.Client {
