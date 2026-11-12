@@ -130,3 +130,9 @@
 !/helpdesk/
 /helpdesk/*
 !/helpdesk/*.go
+!/agentidentity/
+/agentidentity/*
+!/agentidentity/*.go
+!/agentactivity/
+/agentactivity/*
+!/agentactivity/*.go
