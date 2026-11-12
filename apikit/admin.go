@@ -381,3 +381,20 @@ func (a *Admin) Deliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"data": out})
 }
+
+type AdminRoute struct {
+	Method string
+	Path   string
+	Pick   func(*Admin) http.HandlerFunc
+}
+
+var AdminRoutes = []AdminRoute{
+	{http.MethodGet, "/overview", func(a *Admin) http.HandlerFunc { return a.Overview }},
+	{http.MethodPost, "/keys", func(a *Admin) http.HandlerFunc { return a.CreateKey }},
+	{http.MethodPost, "/keys/revoke", func(a *Admin) http.HandlerFunc { return a.RevokeKey }},
+	{http.MethodPost, "/webhooks", func(a *Admin) http.HandlerFunc { return a.CreateWebhook }},
+	{http.MethodPost, "/webhooks/delete", func(a *Admin) http.HandlerFunc { return a.DeleteWebhook }},
+	{http.MethodPost, "/webhooks/toggle", func(a *Admin) http.HandlerFunc { return a.ToggleWebhook }},
+	{http.MethodPost, "/webhooks/test", func(a *Admin) http.HandlerFunc { return a.TestWebhook }},
+	{http.MethodGet, "/deliveries", func(a *Admin) http.HandlerFunc { return a.Deliveries }},
+}
