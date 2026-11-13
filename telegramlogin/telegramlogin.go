@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/CarlSinclair/csuit-libs/logger"
 	"github.com/CarlSinclair/csuit-libs/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 // Sign-in through the platform's Telegram bot. The browser asks for a login
@@ -30,21 +32,49 @@ import (
 // Account-link tokens (CreateTelegramAdminLinkToken) carry the tenant name the
 // same way: link_<tenant>_<16 characters>.
 
+// Identity is what Telegram says about the person who opened the bot.
+type Identity struct {
+	Username  string
+	FirstName string
+	Lang      string
+}
+
+// Config wires the package to an application. Resolve is optional: an
+// application that lets people sign up with Telegram sets it to find or create
+// the account for a chat, and FindUsers is then not used.
 type Config struct {
 	OwnDirName func() string
 	FindUsers  func(chatID int64) ([]int64, error)
+	Resolve    func(chatID int64, who Identity) ([]int64, error)
 	Text       func(langHint, key string) string
 }
 
-var cfg Config
+// Flow is one sign-in flow: a bot, how it finds or creates accounts, and the
+// wording it uses. Kind keeps flows apart: a token issued by one kind is not
+// accepted by another, so a customer sign-in cannot be completed through the
+// bot that signs staff in.
+type Flow struct {
+	Config
+	Kind string
+}
 
-func Configure(c Config) { cfg = c }
+var defaultFlow = &Flow{}
 
-func text(langHint, key string) string {
-	if cfg.Text == nil {
+func Configure(c Config) { defaultFlow.Config = c }
+
+func (f *Flow) text(langHint, key string) string {
+	if f.Text == nil {
 		return key
 	}
-	return cfg.Text(langHint, key)
+	return f.Text(langHint, key)
+}
+
+func (f *Flow) kindOf(key string) (string, error) {
+	v, err := redis.Client().HGet(redis.Ctx, key, "kind").Result()
+	if errors.Is(err, goredis.Nil) {
+		return "", nil
+	}
+	return v, err
 }
 
 const (
@@ -108,14 +138,14 @@ func NewTelegramLoginSecret() (string, error) {
 
 // CreateTelegramLoginToken issues a sign-in token bound to secret. where is
 // shown to the person in the confirmation message.
-func CreateTelegramLoginToken(secret, where string) (string, error) {
+func (f *Flow) CreateTelegramLoginToken(secret, where string) (string, error) {
 	if redis.Client() == nil {
 		return "", fmt.Errorf("redis unavailable")
 	}
 	if strings.TrimSpace(secret) == "" {
 		return "", fmt.Errorf("missing secret")
 	}
-	dir := strings.TrimSpace(cfg.OwnDirName())
+	dir := strings.TrimSpace(f.OwnDirName())
 	if dir == "" {
 		return "", fmt.Errorf("tenant name unavailable")
 	}
@@ -131,7 +161,7 @@ func CreateTelegramLoginToken(secret, where string) (string, error) {
 
 	key := telegramLoginKey(token)
 	pipe := redis.Client().TxPipeline()
-	pipe.HSet(redis.Ctx, key, "secret", telegramLoginHash(secret), "where", where, "stage", "pending")
+	pipe.HSet(redis.Ctx, key, "secret", telegramLoginHash(secret), "where", where, "stage", "pending", "kind", f.Kind)
 	pipe.Expire(redis.Ctx, key, telegramLoginTTL)
 	if _, err := pipe.Exec(redis.Ctx); err != nil {
 		logger.Error("CreateTelegramLoginToken: redis write failed: %v", err)
@@ -181,9 +211,18 @@ func loginEvalInt(script, key string, args ...interface{}) (int64, error) {
 // send either way. Only an enabled admin or staff account linked to this
 // Telegram account can sign in.
 func ProcessTelegramLoginStart(token string, chatID int64, chatType, langHint string) (owned bool, reply, confirm, confirmLabel string) {
+	return defaultFlow.ProcessTelegramLoginStartAs(token, chatID, chatType, langHint, Identity{})
+}
+
+// ProcessTelegramLoginStartAs is ProcessTelegramLoginStart for applications
+// that also need who the person is, to create an account on first sign-in.
+func (f *Flow) ProcessTelegramLoginStartAs(token string, chatID int64, chatType, langHint string, who Identity) (owned bool, reply, confirm, confirmLabel string) {
 	token = strings.TrimSpace(token)
-	invalid := "❌ " + text(langHint, "tg_link_invalid")
-	sysErr := "❌ " + text(langHint, "tg_sys_err")
+	if who.Lang == "" {
+		who.Lang = langHint
+	}
+	invalid := "❌ " + f.text(langHint, "tg_link_invalid")
+	sysErr := "❌ " + f.text(langHint, "tg_sys_err")
 
 	if redis.Client() == nil {
 		logger.Error("ProcessTelegramLoginStart: redis unavailable")
@@ -193,14 +232,15 @@ func ProcessTelegramLoginStart(token string, chatID int64, chatType, langHint st
 		return false, invalid, "", ""
 	}
 	key := telegramLoginKey(token)
-	fields, err := redis.Client().HMGet(redis.Ctx, key, "stage", "where").Result()
+	fields, err := redis.Client().HMGet(redis.Ctx, key, "stage", "where", "kind").Result()
 	if err != nil {
 		logger.Error("ProcessTelegramLoginStart: redis read failed: %v", err)
 		return true, sysErr, "", ""
 	}
 	stage, _ := fields[0].(string)
 	where, _ := fields[1].(string)
-	if stage == "" {
+	kind, _ := fields[2].(string)
+	if stage == "" || kind != f.Kind {
 		return false, invalid, "", ""
 	}
 	if stage != "pending" {
@@ -211,16 +251,21 @@ func ProcessTelegramLoginStart(token string, chatID int64, chatType, langHint st
 		if _, err := loginEvalInt(loginRejectScript, key); err != nil {
 			logger.Error("ProcessTelegramLoginStart: could not mark sign-in rejected: %v", err)
 		}
-		return true, "❌ " + text(langHint, msgKey), "", ""
+		return true, "❌ " + f.text(langHint, msgKey), "", ""
 	}
 	if strings.ToLower(strings.TrimSpace(chatType)) != "private" || chatID <= 0 {
 		return reject("tg_login_private_only")
 	}
-	if cfg.FindUsers == nil {
+	if f.FindUsers == nil && f.Resolve == nil {
 		logger.Error("ProcessTelegramLoginStart: user lookup not configured")
 		return reject("tg_sys_err")
 	}
-	ids, err := cfg.FindUsers(chatID)
+	var ids []int64
+	if f.Resolve != nil {
+		ids, err = f.Resolve(chatID, who)
+	} else {
+		ids, err = f.FindUsers(chatID)
+	}
 	if err != nil {
 		logger.Error("ProcessTelegramLoginStart: user lookup failed chat_id=%d err=%v", chatID, err)
 		return reject("tg_sys_err")
@@ -238,20 +283,20 @@ func ProcessTelegramLoginStart(token string, chatID int64, chatType, langHint st
 	if started != 1 {
 		return true, invalid, "", ""
 	}
-	reply = "🔐 " + text(langHint, "tg_login_ask")
+	reply = "🔐 " + f.text(langHint, "tg_login_ask")
 	if strings.TrimSpace(where) != "" {
 		reply += "\n\n🌍 " + where
 	}
-	return true, reply, token, "✅ " + text(langHint, "tg_login_confirm_btn")
+	return true, reply, token, "✅ " + f.text(langHint, "tg_login_confirm_btn")
 }
 
 // ProcessTelegramLoginConfirm handles the confirm button. Only the chat the
 // start came from can approve it.
-func ProcessTelegramLoginConfirm(token string, chatID int64, langHint string) (owned bool, reply string) {
+func (f *Flow) ProcessTelegramLoginConfirm(token string, chatID int64, langHint string) (owned bool, reply string) {
 	token = strings.TrimSpace(token)
 	if redis.Client() == nil {
 		logger.Error("ProcessTelegramLoginConfirm: redis unavailable")
-		return true, "❌ " + text(langHint, "tg_sys_err")
+		return true, "❌ " + f.text(langHint, "tg_sys_err")
 	}
 	if _, ok := ParseTelegramLoginToken(token); !ok {
 		return false, ""
@@ -260,32 +305,44 @@ func ProcessTelegramLoginConfirm(token string, chatID int64, langHint string) (o
 	exists, err := redis.Client().Exists(redis.Ctx, key).Result()
 	if err != nil {
 		logger.Error("ProcessTelegramLoginConfirm: redis read failed: %v", err)
-		return true, "❌ " + text(langHint, "tg_sys_err")
+		return true, "❌ " + f.text(langHint, "tg_sys_err")
 	}
 	if exists == 0 {
+		return false, ""
+	}
+	if kind, kerr := f.kindOf(key); kerr != nil {
+		logger.Error("ProcessTelegramLoginConfirm: redis read failed: %v", kerr)
+		return true, "❌ " + f.text(langHint, "tg_sys_err")
+	} else if kind != f.Kind {
 		return false, ""
 	}
 	approved, err := loginEvalInt(loginConfirmScript, key, fmt.Sprintf("%d", chatID))
 	if err != nil {
 		logger.Error("ProcessTelegramLoginConfirm: redis update failed: %v", err)
-		return true, "❌ " + text(langHint, "tg_sys_err")
+		return true, "❌ " + f.text(langHint, "tg_sys_err")
 	}
 	if approved != 1 {
-		return true, "❌ " + text(langHint, "tg_link_invalid")
+		return true, "❌ " + f.text(langHint, "tg_link_invalid")
 	}
-	return true, "✅ " + text(langHint, "tg_login_done")
+	return true, "✅ " + f.text(langHint, "tg_login_done")
 }
 
 // PollTelegramLogin reports where a sign-in stands for the page that holds the
 // secret: pending, awaiting (the person has been asked to confirm), approved
 // (the token is consumed and userID is who to sign in), rejected or expired.
-func PollTelegramLogin(token, secret string) (status string, userID int64) {
+func (f *Flow) PollTelegramLogin(token, secret string) (status string, userID int64) {
 	token = strings.TrimSpace(token)
 	if redis.Client() == nil {
 		logger.Error("PollTelegramLogin: redis unavailable")
 		return "expired", 0
 	}
 	if _, ok := ParseTelegramLoginToken(token); !ok || strings.TrimSpace(secret) == "" {
+		return "expired", 0
+	}
+	if kind, kerr := f.kindOf(telegramLoginKey(token)); kerr != nil {
+		logger.Error("PollTelegramLogin: redis read failed: %v", kerr)
+		return "expired", 0
+	} else if kind != f.Kind {
 		return "expired", 0
 	}
 	res, err := redis.Client().Eval(redis.Ctx, loginPollScript, []string{telegramLoginKey(token)}, telegramLoginHash(secret)).Slice()
@@ -301,4 +358,20 @@ func PollTelegramLogin(token, secret string) (status string, userID int64) {
 		}
 	}
 	return status, userID
+}
+
+func CreateTelegramLoginToken(secret, where string) (string, error) {
+	return defaultFlow.CreateTelegramLoginToken(secret, where)
+}
+
+func ProcessTelegramLoginConfirm(token string, chatID int64, langHint string) (owned bool, reply string) {
+	return defaultFlow.ProcessTelegramLoginConfirm(token, chatID, langHint)
+}
+
+func PollTelegramLogin(token, secret string) (status string, userID int64) {
+	return defaultFlow.PollTelegramLogin(token, secret)
+}
+
+func ProcessTelegramLoginStartAs(token string, chatID int64, chatType, langHint string, who Identity) (owned bool, reply, confirm, confirmLabel string) {
+	return defaultFlow.ProcessTelegramLoginStartAs(token, chatID, chatType, langHint, who)
 }

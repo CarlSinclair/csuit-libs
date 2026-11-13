@@ -18,6 +18,7 @@ type Subject struct {
 }
 
 type HTTPConfig struct {
+	Flow         *Flow
 	BotUsername  func() string
 	Where        func(r *http.Request) string
 	LookupUser   func(id int64) (Subject, error)
@@ -25,6 +26,13 @@ type HTTPConfig struct {
 	Temp2FAToken func(userID int64) (string, error)
 	Finalize     func(w http.ResponseWriter, r *http.Request, s Subject)
 	TwoFAPath    string
+}
+
+func (c HTTPConfig) flow() *Flow {
+	if c.Flow != nil {
+		return c.Flow
+	}
+	return defaultFlow
 }
 
 func writeJSON(w http.ResponseWriter, status int, v map[string]string) {
@@ -49,7 +57,7 @@ func (c HTTPConfig) HandleStart(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "system_error"})
 		return
 	}
-	token, err := CreateTelegramLoginToken(secret, c.Where(r))
+	token, err := c.flow().CreateTelegramLoginToken(secret, c.Where(r))
 	if err != nil {
 		logger.Error("AUTH telegram_login_start: token failed err=%v", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "system_error"})
@@ -64,7 +72,7 @@ func (c HTTPConfig) HandleStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c HTTPConfig) HandlePoll(w http.ResponseWriter, r *http.Request) {
-	status, userID := PollTelegramLogin(r.URL.Query().Get("t"), r.Header.Get(PollSecretHeader))
+	status, userID := c.flow().PollTelegramLogin(r.URL.Query().Get("t"), r.Header.Get(PollSecretHeader))
 	if status != "approved" {
 		writeJSON(w, http.StatusOK, map[string]string{"status": status})
 		return

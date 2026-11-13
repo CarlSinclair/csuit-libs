@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -73,6 +74,11 @@ var webpushHTTPClient = apikit.NewSafeClient(func(host string) error {
 	return nil
 })
 
+// unifiedPushClient delivers to UnifiedPush distributors, whose hosts are not
+// known in advance (a self-hosted ntfy, for one). The safe client still
+// refuses private, loopback and link-local destinations and any redirect.
+var unifiedPushClient = apikit.NewSafeClient(nil)
+
 var pushHostSuffixes = []string{
 	"fcm.googleapis.com",
 	"push.services.mozilla.com",
@@ -83,17 +89,37 @@ var pushHostSuffixes = []string{
 var ErrInvalidPushEndpoint = errors.New("push endpoint is not an https URL on a known push service")
 
 func ValidatePushEndpoint(raw string) error {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Host == "" {
-		return ErrInvalidPushEndpoint
-	}
-	if p := u.Port(); p != "" && p != "443" {
-		return ErrInvalidPushEndpoint
+	u, err := publicHTTPSEndpoint(raw)
+	if err != nil {
+		return err
 	}
 	if !pushHostAllowed(u.Hostname()) {
 		return ErrInvalidPushEndpoint
 	}
 	return nil
+}
+
+// ValidateDeviceEndpoint accepts the endpoint of a native app's push
+// distributor, whose host is not known in advance (a self-hosted ntfy, for
+// one). It must still be a public https address; delivery goes through the
+// safe client, which also refuses private ranges and redirects.
+func ValidateDeviceEndpoint(raw string) error {
+	_, err := publicHTTPSEndpoint(raw)
+	return err
+}
+
+func publicHTTPSEndpoint(raw string) (*url.URL, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Host == "" {
+		return nil, ErrInvalidPushEndpoint
+	}
+	if p := u.Port(); p != "" && p != "443" {
+		return nil, ErrInvalidPushEndpoint
+	}
+	if net.ParseIP(u.Hostname()) != nil || !strings.Contains(u.Hostname(), ".") {
+		return nil, ErrInvalidPushEndpoint
+	}
+	return u, nil
 }
 
 func pushHostAllowed(host string) bool {
@@ -201,13 +227,24 @@ func endpointHash(endpoint string) string {
 // in some browsers, or a plain re-registration) just refreshes the row
 // instead of accumulating duplicates.
 func SavePushSubscription(userID int64, endpoint, p256dh, auth, userAgent string) error {
+	return savePushSubscription(userID, endpoint, p256dh, auth, userAgent, ValidatePushEndpoint)
+}
+
+// SaveDeviceSubscription stores a native app's registration. It is the same
+// kind of per-device opt-in as a browser subscription and lives in the same
+// table, so the notification settings apply to both unchanged.
+func SaveDeviceSubscription(userID int64, endpoint, p256dh, auth, userAgent string) error {
+	return savePushSubscription(userID, endpoint, p256dh, auth, userAgent, ValidateDeviceEndpoint)
+}
+
+func savePushSubscription(userID int64, endpoint, p256dh, auth, userAgent string, validate func(string) error) error {
 	endpoint = strings.TrimSpace(endpoint)
 	p256dh = strings.TrimSpace(p256dh)
 	auth = strings.TrimSpace(auth)
 	if userID <= 0 || endpoint == "" || p256dh == "" || auth == "" {
 		return fmt.Errorf("missing required subscription fields")
 	}
-	if err := ValidatePushEndpoint(endpoint); err != nil {
+	if err := validate(endpoint); err != nil {
 		return err
 	}
 	d, err := database()
@@ -370,7 +407,7 @@ func SendSessionEndedPush(userID int64) {
 }
 
 func sendWebPush(sub PushSubscription, payload []byte) error {
-	if err := ValidatePushEndpoint(sub.Endpoint); err != nil {
+	if err := ValidateDeviceEndpoint(sub.Endpoint); err != nil {
 		if delErr := DeletePushSubscription(sub.UserID, sub.Endpoint); delErr != nil {
 			logger.Error("sendWebPush: removing subscription with invalid endpoint failed user_id=%d err=%v", sub.UserID, delErr)
 		} else {
@@ -415,7 +452,11 @@ func sendWebPush(sub PushSubscription, payload []byte) error {
 	req.Header.Set("Authorization", fmt.Sprintf("vapid t=%s, k=%s", signed, vapidPubB64))
 	req.Header.Set("TTL", "86400")
 
-	resp, err := webpushHTTPClient.Do(req)
+	client := unifiedPushClient
+	if u, perr := url.Parse(sub.Endpoint); perr == nil && pushHostAllowed(u.Hostname()) {
+		client = webpushHTTPClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

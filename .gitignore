@@ -75,9 +75,15 @@
 !/platformforward/
 /platformforward/*
 !/platformforward/*.go
+!/pwa/
+/pwa/*
+!/pwa/*.go
 !/redis/
 /redis/*
 !/redis/*.go
+!/redis/embedded/
+/redis/embedded/*
+!/redis/embedded/*.go
 !/redisadmin/
 /redisadmin/*
 !/redisadmin/*.go
