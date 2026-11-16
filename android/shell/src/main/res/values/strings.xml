@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shell_instance_title">Where is your account?</string>
+    <string name="shell_instance_hint">your-name</string>
+    <string name="shell_instance_continue">Continue</string>
+    <string name="shell_instance_invalid">Use only letters, numbers and hyphens.</string>
+    <string name="shell_load_error_title">Could not load the page</string>
+    <string name="shell_load_error_text">Check your connection and try again.</string>
+    <string name="shell_retry">Retry</string>
+    <string name="shell_change_instance">Change address</string>
+    <string name="shell_choose_push_app">Choose a push app</string>
+    <string name="shell_cancel">Cancel</string>
+    <string name="shell_listener_label">Media detection</string>
+    <string name="shell_signin_title">Sign in</string>
+    <string name="shell_push_channel_default">Notifications</string>
+</resources>

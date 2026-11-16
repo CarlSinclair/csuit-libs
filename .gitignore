@@ -120,6 +120,7 @@
 !/twofa/
 /twofa/*
 !/twofa/*.go
+!/twofa/*.js
 !/validate/
 /validate/*
 !/validate/*.go
@@ -142,3 +143,7 @@
 !/agentactivity/
 /agentactivity/*
 !/agentactivity/*.go
+!/android/
+/android/**/build/
+/android/**/.gradle/
+/android/**/local.properties
