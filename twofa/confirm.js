@@ -9,7 +9,13 @@
         btn.insertAdjacentElement("afterend", out);
       }
       btn.disabled = true;
-      fetch(btn.getAttribute("data-forgot-send"), { credentials: "same-origin", cache: "no-store" })
+      var target = btn.getAttribute("data-forgot-send");
+      var from = btn.getAttribute("data-query-from");
+      if (from) {
+        var src = document.querySelector(from);
+        target += (target.indexOf("?") === -1 ? "?" : "&") + (btn.getAttribute("data-query-name") || "value") + "=" + encodeURIComponent(src ? src.value : "");
+      }
+      fetch(target, { credentials: "same-origin", cache: "no-store" })
         .then(function (r) {
           btn.disabled = false;
           var key = r.ok ? "data-text-sent" : r.status === 429 ? "data-text-wait" : "data-text-failed";
