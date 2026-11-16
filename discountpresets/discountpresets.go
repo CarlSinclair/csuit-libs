@@ -102,42 +102,6 @@ func (s Store) tbl() (string, error) {
 	return `"` + s.Table + `"`, nil
 }
 
-// EnsureSchema creates the table if missing. Safe on every boot.
-func (s Store) EnsureSchema() error {
-	t, err := s.tbl()
-	if err != nil {
-		return err
-	}
-	var ddl string
-	if s.MySQL {
-		ddl = `CREATE TABLE IF NOT EXISTS ` + t + ` (
-			id         BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-			label      VARCHAR(191) NOT NULL,
-			kind       VARCHAR(16) NOT NULL,
-			value      BIGINT NOT NULL,
-			active     TINYINT(1) NOT NULL DEFAULT 1,
-			sort_order INT NOT NULL DEFAULT 0,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-	} else {
-		ddl = `CREATE TABLE IF NOT EXISTS ` + t + ` (
-			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			label      TEXT NOT NULL,
-			kind       TEXT NOT NULL,
-			value      INTEGER NOT NULL,
-			active     INTEGER NOT NULL DEFAULT 1,
-			sort_order INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`
-	}
-	if _, err := s.DB.Exec(ddl); err != nil {
-		return fmt.Errorf("ensure %s: %w", s.Table, err)
-	}
-	return nil
-}
-
 // List returns presets ordered for display. activeOnly hides disabled ones
 // (the sale-time picker); the management screen passes false.
 func (s Store) List(activeOnly bool) ([]Preset, error) {

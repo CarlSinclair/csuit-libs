@@ -6,6 +6,7 @@ package legalpages
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -15,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
 // SlugRe is the allowed public-slug shape: lowercase letters, digits and
@@ -229,9 +232,20 @@ func (s Store) ListPages() ([]Page, error) {
 // whose slug matches exactly. Alternates carries the page's other enabled
 // language variants for hreflang.
 func (s Store) Resolve(slug string) (Resolved, bool) {
+	r, ok, err := s.Lookup(slug)
+	if err != nil {
+		logger.Error("legalpages: resolve failed table=%s slug=%q err=%v", s.tbl(), slug, err)
+	}
+	return r, ok
+}
+
+// Lookup is Resolve with the database error surfaced: a missing or disabled
+// page is (zero, false, nil); a failed query is (zero, false, err), so callers
+// can answer 5xx instead of a misleading 404.
+func (s Store) Lookup(slug string) (Resolved, bool, error) {
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if slug == "" {
-		return Resolved{}, false
+		return Resolved{}, false, nil
 	}
 	var r Resolved
 	var su int
@@ -240,7 +254,10 @@ func (s Store) Resolve(slug string) (Resolved, bool) {
 			` WHERE slug = ? AND enabled = 1 AND page_enabled = 1`, slug,
 	).Scan(&r.PageID, &r.Lang, &r.Title, &r.Body, &r.UpdatedAt, &su)
 	if err != nil {
-		return Resolved{}, false
+		if errors.Is(err, sql.ErrNoRows) {
+			return Resolved{}, false, nil
+		}
+		return Resolved{}, false, fmt.Errorf("legalpages: lookup slug %q: %w", slug, err)
 	}
 	r.ShowUpdated = su != 0
 	if IsPrivateLang(r.Lang) {
@@ -251,16 +268,25 @@ func (s Store) Resolve(slug string) (Resolved, bool) {
 		`SELECT lang, slug FROM `+s.tbl()+
 			` WHERE page_id = ? AND enabled = 1 AND page_enabled = 1 AND slug != ''`, r.PageID,
 	)
-	if err == nil {
-		defer arows.Close()
-		for arows.Next() {
-			var a Alt
-			if arows.Scan(&a.Lang, &a.Slug) == nil && !IsPrivateLang(a.Lang) {
-				r.Alternates = append(r.Alternates, a)
-			}
+	if err != nil {
+		logger.Warn("legalpages: alternates query failed table=%s page_id=%d err=%v", s.tbl(), r.PageID, err)
+		return r, true, nil
+	}
+	defer arows.Close()
+	for arows.Next() {
+		var a Alt
+		if err := arows.Scan(&a.Lang, &a.Slug); err != nil {
+			logger.Warn("legalpages: alternate scan failed table=%s page_id=%d err=%v", s.tbl(), r.PageID, err)
+			continue
+		}
+		if !IsPrivateLang(a.Lang) {
+			r.Alternates = append(r.Alternates, a)
 		}
 	}
-	return r, true
+	if err := arows.Err(); err != nil {
+		logger.Warn("legalpages: alternates iterate failed table=%s page_id=%d err=%v", s.tbl(), r.PageID, err)
+	}
+	return r, true, nil
 }
 
 // LiveSlugs lists every public slug that resolves, for the sitemap.

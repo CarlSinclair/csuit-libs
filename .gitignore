@@ -150,3 +150,7 @@
 !/discountpresets/
 /discountpresets/*
 !/discountpresets/*.go
+!/notifykit/
+/notifykit/*
+!/notifykit/*.go
+!/notifykit/assets/
