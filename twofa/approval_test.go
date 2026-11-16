@@ -23,12 +23,19 @@ func TestPrefsDecisions(t *testing.T) {
 	if got := p.Enabled(true, false); len(got) != 1 {
 		t.Fatalf("telegram without a chat must not count: %v", got)
 	}
-	if p.SkipsFor(true, en) {
-		t.Fatal("passkey must not skip unless chosen")
-	}
-	p.PasskeySkips = true
 	if !p.SkipsFor(true, en) || p.SkipsFor(false, en) {
-		t.Fatal("passkey skip only applies to passkey sign-ins")
+		t.Fatal("passkey must skip 2FA unless the person turned the requirement on, and only for passkey sign-ins")
+	}
+	p.PasskeyRequires = true
+	if p.SkipsFor(true, en) {
+		t.Fatal("passkey must not skip once the person requires 2FA on it")
+	}
+	if p.NeedsStep(ViaMagic, en) || p.NeedsStep(ViaTelegram, en) || !p.NeedsStep(ViaPassword, en) {
+		t.Fatal("magic and Telegram sign-ins skip 2FA unless required; password always needs it")
+	}
+	p.MagicRequires = true
+	if !p.NeedsStep(ViaMagic, []Method{MethodTOTP, MethodEmail}) {
+		t.Fatal("a required magic-link sign-in still needs the methods beyond email")
 	}
 	if ParsePrefs("{bad").All || ParsePrefs(p.Encode()) != p {
 		t.Fatal("prefs must round-trip and bad input fall back to defaults")

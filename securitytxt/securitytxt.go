@@ -11,6 +11,12 @@ import (
 	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
+const (
+	Languages = "en, pt, es, ar"
+	PolicyURL = "https://carl-sinclair.com/.well-known/disclosure-policy.txt"
+	validDays = 330
+)
+
 var securityTxtHostRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
 
 func securityTxtHost(r *http.Request) string {
@@ -19,6 +25,7 @@ func securityTxtHost(r *http.Request) string {
 		host = h
 	}
 	host = strings.TrimSuffix(host, ".")
+	host = strings.TrimPrefix(host, "www.")
 	if len(host) > 253 || !securityTxtHostRe.MatchString(host) {
 		return ""
 	}
@@ -43,8 +50,12 @@ func handle(w http.ResponseWriter, r *http.Request, owner, languages string) {
 		http.Error(w, "bad host", http.StatusBadRequest)
 		return
 	}
-	expires := time.Now().UTC().AddDate(0, 6, 0).Format("2006-01-02T15:04:05.000Z")
-	body := fmt.Sprintf("# Security contact for %[1]s - %[3]s\nContact: mailto:sec@%[1]s\nExpires: %[2]s\nPreferred-Languages: %[4]s\nCanonical: https://%[1]s/.well-known/security.txt\n", host, expires, owner, languages)
+	if languages == "" {
+		languages = Languages
+	}
+	exp := time.Now().UTC().AddDate(0, 0, validDays)
+	expires := time.Date(exp.Year(), exp.Month(), exp.Day(), 23, 59, 59, 0, time.UTC).Format("2006-01-02T15:04:05.000Z")
+	body := fmt.Sprintf("# Security contact for %[1]s - %[3]s\nContact: mailto:sec@%[1]s\nExpires: %[2]s\nPreferred-Languages: %[4]s\nCanonical: https://%[1]s/.well-known/security.txt\nPolicy: %[5]s\n", host, expires, owner, languages, PolicyURL)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	if r.Method == http.MethodHead {

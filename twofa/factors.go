@@ -20,12 +20,12 @@ const (
 // whether a passkey sign-in skips 2FA, and whether Telegram approval is on.
 // It is stored as one small JSON string next to the account.
 type Prefs struct {
-	Telegram      bool `json:"telegram,omitempty"`
-	Email         bool `json:"email,omitempty"`
-	All           bool `json:"all,omitempty"`
-	PasskeySkips  bool `json:"passkey_skips,omitempty"`
-	MagicSkips    bool `json:"magic_skips,omitempty"`
-	TelegramSkips bool `json:"telegram_skips,omitempty"`
+	Telegram         bool `json:"telegram,omitempty"`
+	Email            bool `json:"email,omitempty"`
+	All              bool `json:"all,omitempty"`
+	PasskeyRequires  bool `json:"passkey_requires,omitempty"`
+	MagicRequires    bool `json:"magic_requires,omitempty"`
+	TelegramRequires bool `json:"telegram_requires,omitempty"`
 }
 
 func ParsePrefs(raw string) Prefs {
@@ -78,10 +78,11 @@ const (
 )
 
 // NeedsStep reports whether a sign-in by this route still needs a 2FA step.
-// A magic link proves the email method and a Telegram sign-in proves the
-// Telegram method, so each counts as that method being done; the person's own
-// "skip 2FA for this route" choice is honoured for passkey, magic link and
-// Telegram, never for a password or a password reset.
+// A password sign-in needs one whenever any method is enabled. Passkey, magic
+// link and Telegram sign-ins need one only when the person turned on the
+// matching "also ask" preference; a magic link then counts as the email method
+// being done and a Telegram sign-in as the Telegram method. Password reset and
+// password change are not decided here: they always require a proof.
 func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
 	if len(enabled) == 0 {
 		return false
@@ -89,16 +90,16 @@ func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
 	done := map[Method]bool{}
 	switch v {
 	case ViaPasskey:
-		if p.PasskeySkips {
+		if !p.PasskeyRequires {
 			return false
 		}
 	case ViaMagic:
-		if p.MagicSkips {
+		if !p.MagicRequires {
 			return false
 		}
 		done[MethodEmail] = true
 	case ViaTelegram:
-		if p.TelegramSkips {
+		if !p.TelegramRequires {
 			return false
 		}
 		done[MethodTelegram] = true
@@ -108,7 +109,7 @@ func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
 
 // SkipsFor reports whether a sign-in needs no 2FA step at all.
 func (p Prefs) SkipsFor(viaPasskey bool, enabled []Method) bool {
-	return len(enabled) == 0 || (viaPasskey && p.PasskeySkips)
+	return len(enabled) == 0 || (viaPasskey && !p.PasskeyRequires)
 }
 
 // Satisfied reports whether the methods completed so far are enough.
