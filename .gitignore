@@ -87,6 +87,15 @@
 !/redisadmin/
 /redisadmin/*
 !/redisadmin/*.go
+!/searchkit/
+/searchkit/*
+!/searchkit/*.go
+!/searchkit/redisindex/
+/searchkit/redisindex/*
+!/searchkit/redisindex/*.go
+!/faqsearch/
+/faqsearch/*
+!/faqsearch/*.go
 !/secheaders/
 /secheaders/*
 !/secheaders/*.go

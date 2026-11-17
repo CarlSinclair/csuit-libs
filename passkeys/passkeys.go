@@ -302,6 +302,15 @@ type Info struct {
 	LastUsedAt sql.NullTime
 }
 
+// Has reports whether the account has at least one passkey registered.
+func (s *Service) Has(userID int64) (bool, error) {
+	var n int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM user_passkeys WHERE user_id = ?`, userID).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (s *Service) List(userID int64) ([]Info, error) {
 	rows, err := s.DB().Query(`SELECT id, name, created_at, last_used_at FROM user_passkeys WHERE user_id = ? ORDER BY id`, userID)
 	if err != nil {

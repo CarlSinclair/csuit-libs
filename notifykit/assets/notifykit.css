@@ -1,13 +1,14 @@
+.nk-root,.nk-overlay{--nk-bg:var(--card-bg,var(--panel,#fff));--nk-fg:var(--text-color,var(--text,#1f2328));--nk-line:var(--border-color,var(--border,#d0d7de));--nk-accent:var(--primary-color,var(--accent,#0969da))}
 .nk-root{position:relative;display:inline-block}
 .nk-button{position:relative;background:none;border:0;cursor:pointer;padding:6px;color:inherit;display:inline-flex;align-items:center}
 .nk-icon{width:20px;height:20px;fill:currentColor}
 .nk-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#d93025;color:#fff;font-size:11px;line-height:16px;text-align:center;box-sizing:border-box}
-.nk-panel{position:absolute;right:0;top:100%;width:340px;max-width:92vw;background:var(--card-bg,#fff);color:var(--text,#1f2328);border:1px solid var(--border,#d0d7de);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:1000}
-.nk-head{padding:10px 14px;border-bottom:1px solid var(--border,#d0d7de)}
+.nk-panel{position:absolute;right:0;top:100%;width:340px;max-width:92vw;background:var(--nk-bg);color:var(--nk-fg);border:1px solid var(--nk-line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:1000}
+.nk-head{padding:10px 14px;border-bottom:1px solid var(--nk-line)}
 .nk-body{max-height:380px;overflow-y:auto}
-.nk-foot{padding:8px 14px;border-top:1px solid var(--border,#d0d7de);text-align:center}
-.nk-link{background:none;border:0;color:var(--primary,#0969da);cursor:pointer;font:inherit}
-.nk-item,.nk-group{display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;padding:10px 14px;text-align:left;text-decoration:none;color:inherit;background:none;border:0;border-bottom:1px solid var(--border,#eaeef2);cursor:pointer;font:inherit}
+.nk-foot{padding:8px 14px;border-top:1px solid var(--nk-line);text-align:center}
+.nk-link{background:none;border:0;color:var(--nk-accent);cursor:pointer;font:inherit}
+.nk-item,.nk-group{display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;padding:10px 14px;text-align:left;text-decoration:none;color:inherit;background:none;border:0;border-bottom:1px solid var(--nk-line);cursor:pointer;font:inherit}
 .nk-item:hover,.nk-group:hover{background:rgba(127,127,127,.08)}
 .nk-unread .nk-item-title,.nk-unread .nk-group-name{font-weight:600}
 .nk-read{opacity:.55}
@@ -19,13 +20,13 @@
 .nk-error{color:#d93025;opacity:1}
 .nk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:2000}
 .nk-overlay[hidden],.nk-panel[hidden],.nk-badge[hidden]{display:none}
-.nk-dialog{background:var(--card-bg,#fff);color:var(--text,#1f2328);width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;border-radius:10px;overflow:hidden}
-.nk-modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border,#d0d7de)}
+.nk-dialog{background:var(--nk-bg);color:var(--nk-fg);width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;border-radius:10px;overflow:hidden}
+.nk-modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--nk-line)}
 .nk-modal-title{margin:0;font-size:18px}
 .nk-close{background:none;border:0;font-size:24px;cursor:pointer;color:inherit}
-.nk-modal-bar{padding:10px 16px;border-bottom:1px solid var(--border,#eaeef2)}
+.nk-modal-bar{padding:10px 16px;border-bottom:1px solid var(--nk-line)}
 .nk-modal-list{overflow-y:auto;flex:1}
-.nk-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 16px;border-top:1px solid var(--border,#d0d7de)}
-.nk-btn{padding:6px 12px;border:1px solid var(--border,#d0d7de);border-radius:6px;background:var(--card-bg,#fff);color:inherit;cursor:pointer;font:inherit}
+.nk-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 16px;border-top:1px solid var(--nk-line)}
+.nk-btn{padding:6px 12px;border:1px solid var(--nk-line);border-radius:6px;background:var(--nk-bg);color:var(--nk-fg);cursor:pointer;font:inherit}
 .nk-btn:disabled{opacity:.5;cursor:default}
-.nk-row{border-bottom:1px solid var(--border,#eaeef2)}.nk-row .nk-item{border-bottom:0}
+.nk-row{border-bottom:1px solid var(--nk-line)}.nk-row .nk-item{border-bottom:0}

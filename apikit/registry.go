@@ -60,6 +60,10 @@ func (g *Registry) Handle(op Op, h HandlerFunc) {
 	g.mount(op.Method, op.Path, wrapped)
 }
 
+func (g *Registry) Ops() []Op {
+	return append([]Op(nil), g.ops...)
+}
+
 func (g *Registry) Scopes() []string {
 	set := map[string]bool{}
 	for _, op := range g.ops {

@@ -1,6 +1,7 @@
 (function () {
   "use strict";
   var POLL_MS = 30000;
+  var FAIL_LIMIT = 3;
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -16,6 +17,7 @@
     this.state = { grouped: false, history: false, summary: null };
     this.modal = { category: "", page: 1 };
     this.timer = null;
+    this.failures = 0;
     this.build();
     this.refresh();
     this.schedule();
@@ -101,10 +103,13 @@
   Bell.prototype.refresh = function () {
     var self = this;
     return this.request("GET", "/summary").then(function (data) {
+      self.failures = 0;
       self.state.summary = data;
       self.renderBadge();
       if (!self.panel.hidden) self.renderPanel();
     }).catch(function (err) {
+      self.failures += 1;
+      if (self.failures < FAIL_LIMIT) return;
       console.error("notifications: summary failed", err);
       self.state.summary = null;
       if (!self.panel.hidden) self.renderError(self.panel);

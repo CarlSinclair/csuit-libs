@@ -101,3 +101,26 @@ func TestApprovalAnswers(t *testing.T) {
 		t.Fatalf("cleared = %v", d)
 	}
 }
+
+func TestPasskeyCountsAtSignInOnly(t *testing.T) {
+	p := Prefs{}
+	enabled := p.EnabledSignIn(false, false, true)
+	if len(enabled) != 1 || enabled[0] != MethodPasskey {
+		t.Fatalf("a passkey alone should be the only sign-in method, got %v", enabled)
+	}
+	if !p.NeedsStep(ViaPassword, enabled) {
+		t.Fatalf("a password sign-in must ask for the passkey")
+	}
+	if p.NeedsStep(ViaPasskey, enabled) {
+		t.Fatalf("a passkey sign-in must not ask again")
+	}
+	q := Prefs{PasskeyRequires: true}
+	both := q.EnabledSignIn(true, false, true)
+	if q.NeedsStep(ViaPasskey, both) {
+		t.Fatalf("in any-mode a passkey sign-in already satisfies the step")
+	}
+	ok, err := p.ProofSatisfied("t", 1, enabled, false)
+	if err != nil || !ok {
+		t.Fatalf("a passkey alone must not block sensitive actions: %v %v", ok, err)
+	}
+}

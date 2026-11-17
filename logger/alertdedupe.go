@@ -87,9 +87,11 @@ func alertSaveLocked() {
 		log.Printf("ALERT DEDUPE: encoding state failed: %v", err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o775); err != nil {
-		log.Printf("ALERT DEDUPE: creating %s failed, state not persisted: %v", filepath.Dir(path), err)
-		return
+	if err := EnsureDir(filepath.Dir(path), 0o770); err != nil {
+		log.Printf("ALERT DEDUPE: %v", err)
+		if _, serr := os.Stat(filepath.Dir(path)); serr != nil {
+			return
+		}
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, raw, 0o660); err != nil {

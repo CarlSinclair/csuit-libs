@@ -13,9 +13,7 @@ import (
 )
 
 const (
-	persistMaxKeys        = 500
-	clientGoneAlertHits   = 10
-	clientGoneAlertWindow = 5 * time.Minute
+	persistMaxKeys = 500
 )
 
 type persistEntry struct {
@@ -94,8 +92,7 @@ func RenderError(tmpl string, err error, r *http.Request, detail string) {
 			return
 		}
 	}
-	Persistent("client-write:"+tmpl, clientGoneAlertHits, clientGoneAlertWindow,
-		"client gone while writing [%s]: %v %s", tmpl, err, detail)
+	Warn("client gone while writing [%s]: %v %s", tmpl, err, detail)
 }
 
 func MissingKey(key string) {
@@ -124,6 +121,5 @@ func WriteFailed(what string, err error, r *http.Request, detail string) {
 			return
 		}
 	}
-	Persistent("client-write:"+what, clientGoneAlertHits, clientGoneAlertWindow,
-		"client gone while writing [%s]: %v %s", what, err, detail)
+	Warn("client gone while writing [%s]: %v %s", what, err, detail)
 }

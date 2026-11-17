@@ -47,8 +47,11 @@ func spoolAppend(queueName string, data []byte) error {
 	}
 	spoolMu.Lock()
 	defer spoolMu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(path), spoolDirMode); err != nil {
-		return err
+	if err := logger.EnsureDir(filepath.Dir(path), spoolDirMode); err != nil {
+		logger.Warn("Redis spool: %v", err)
+		if _, serr := os.Stat(filepath.Dir(path)); serr != nil {
+			return err
+		}
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, spoolFileMode)
 	if err != nil {

@@ -15,9 +15,13 @@ var confirmJS []byte
 //go:embed telegram.js
 var telegramJS []byte
 
+//go:embed passkeystep.js
+var passkeyStepJS []byte
+
 const (
-	ConfirmJSPath  = "/static/twofa/confirm.js"
-	TelegramJSPath = "/static/twofa/telegram.js"
+	ConfirmJSPath     = "/static/twofa/confirm.js"
+	TelegramJSPath    = "/static/twofa/telegram.js"
+	PasskeyStepJSPath = "/static/twofa/passkey.js"
 )
 
 func scriptTag(b []byte) string {
@@ -33,6 +37,10 @@ func ConfirmJSHandler() http.Handler { return scriptHandler(confirmJS) }
 // TelegramJSHandler serves the sign-in Telegram approval script every product
 // loads from TelegramJSPath.
 func TelegramJSHandler() http.Handler { return scriptHandler(telegramJS) }
+
+// PasskeyStepJSHandler serves the script that asks for a passkey as a factor
+// on the second sign-in step.
+func PasskeyStepJSHandler() http.Handler { return scriptHandler(passkeyStepJS) }
 
 func scriptHandler(body []byte) http.Handler {
 	tag := scriptTag(body)

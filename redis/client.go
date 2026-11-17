@@ -107,14 +107,15 @@ func ActiveAddr() string {
 
 func connect(s Settings) (*goredis.Client, error) {
 	client := goredis.NewClient(&goredis.Options{
-		Addr:         s.Addr,
-		Password:     s.Password,
-		DB:           s.DB,
-		DialTimeout:  3 * time.Second,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 5 * time.Second,
-		PoolTimeout:  5 * time.Second,
-		MaxRetries:   1,
+		Addr:          s.Addr,
+		Password:      s.Password,
+		DB:            s.DB,
+		DialTimeout:   3 * time.Second,
+		ReadTimeout:   30 * time.Second,
+		WriteTimeout:  5 * time.Second,
+		PoolTimeout:   5 * time.Second,
+		MaxRetries:    1,
+		UnstableResp3: true,
 	})
 	if err := client.Ping(Ctx).Err(); err != nil {
 		if cerr := client.Close(); cerr != nil {

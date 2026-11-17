@@ -13,6 +13,7 @@ const (
 	MethodTOTP     Method = "totp"
 	MethodTelegram Method = "telegram"
 	MethodEmail    Method = "email"
+	MethodPasskey  Method = "passkey"
 )
 
 // Prefs is what a person chose on their 2FA page besides which methods are
@@ -83,6 +84,29 @@ const (
 // matching "also ask" preference; a magic link then counts as the email method
 // being done and a Telegram sign-in as the Telegram method. Password reset and
 // password change are not decided here: they always require a proof.
+// EnabledSignIn is Enabled plus the passkey, which counts as a method only at
+// sign-in: someone who registered a passkey and then signs in with the
+// password must also prove the passkey (or whatever else they enabled). Proofs
+// for sensitive actions never include it (see ProofSatisfied).
+func (p Prefs) EnabledSignIn(totpOn, telegramLinked, hasPasskey bool) []Method {
+	out := p.Enabled(totpOn, telegramLinked)
+	if hasPasskey {
+		out = append(out, MethodPasskey)
+	}
+	return out
+}
+
+// WithoutPasskey drops the passkey from a method list.
+func WithoutPasskey(enabled []Method) []Method {
+	out := make([]Method, 0, len(enabled))
+	for _, m := range enabled {
+		if m != MethodPasskey {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
 	if len(enabled) == 0 {
 		return false
@@ -93,6 +117,7 @@ func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
 		if !p.PasskeyRequires {
 			return false
 		}
+		done[MethodPasskey] = true
 	case ViaMagic:
 		if !p.MagicRequires {
 			return false
@@ -149,6 +174,7 @@ func (p Prefs) Remaining(enabled []Method, done map[Method]bool) []Method {
 // request, and proven lists methods already checked in this request. The other methods are proven earlier, on the page, and left a proof
 // that is used up here. In "all" mode nothing is used up until the code is right.
 func (p Prefs) ProofSatisfied(tenant string, userID int64, enabled []Method, totpOK bool, proven ...Method) (bool, error) {
+	enabled = WithoutPasskey(enabled)
 	if len(enabled) == 0 {
 		return true, nil
 	}

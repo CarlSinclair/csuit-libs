@@ -29,6 +29,8 @@ type Handlers struct {
 	CurrentUser  func(r *http.Request) (id int64, email string, ok bool)
 	Record       func(r *http.Request, userID int64, action, detail string)
 	Flash        func(w http.ResponseWriter, r *http.Request, kind, key string)
+	StepUser     func(r *http.Request) (userID int64, ok bool)
+	StepDone     func(w http.ResponseWriter, r *http.Request, userID int64) (dest string, code string, err error)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v map[string]any) {
@@ -165,4 +167,43 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) SessionRevoke(w http.ResponseWriter, r *http.Request) {
 	h.removeByID(w, r, "session_revoke", "session_revoke_failed", "session_revoked", "session_revoked", h.Svc.RevokeSession)
+}
+
+// StepFinish completes a passkey assertion as one factor of a sign-in that is
+// already waiting for a second step. The assertion must belong to the same
+// account the first step identified, so a passkey from another account cannot
+// satisfy it.
+func (h *Handlers) StepFinish(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "method"})
+		return
+	}
+	want, ok := h.StepUser(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "session_expired"})
+		return
+	}
+	userID, err := h.Svc.FinishLogin(r, r.URL.Query().Get("t"))
+	if err != nil {
+		logger.Warn("AUTH passkey_step_failed uid=%d loc=%s err=%v", want, h.ip(r), err)
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "rejected"})
+		return
+	}
+	if userID != want {
+		logger.Warn("AUTH passkey_step_wrong_account uid=%d got=%d loc=%s", want, userID, h.ip(r))
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "rejected"})
+		return
+	}
+	h.Record(r, userID, "passkey_2fa", "")
+	dest, code, err := h.StepDone(w, r, userID)
+	if err != nil {
+		logger.Error("AUTH passkey_step_done failed uid=%d err=%v", userID, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "unavailable"})
+		return
+	}
+	if code != "" {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": code})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"redirect": dest})
 }

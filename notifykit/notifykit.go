@@ -9,6 +9,9 @@ import (
 const (
 	CatSecurity   = "security"
 	CatBilling    = "billing"
+	CatFinance    = "finance"
+	CatTabs       = "tabs"
+	CatProducts   = "products"
 	CatSupport    = "support"
 	CatModeration = "moderation"
 	CatOrders     = "orders"
@@ -25,7 +28,7 @@ const (
 
 var categoryOrder = []string{
 	CatSecurity, CatBilling, CatSupport, CatModeration,
-	CatOrders, CatBookings, CatSocial, CatEpisodes, CatSystem, CatOther,
+	CatTabs, CatFinance, CatOrders, CatProducts, CatBookings, CatSocial, CatEpisodes, CatSystem, CatOther,
 }
 
 var categoryRank = func() map[string]int {
