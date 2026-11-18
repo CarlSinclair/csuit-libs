@@ -163,3 +163,9 @@
 /notifykit/*
 !/notifykit/*.go
 !/notifykit/assets/
+!/objstore/
+/objstore/*
+!/objstore/*.go
+!/pdfkit/
+/pdfkit/*
+!/pdfkit/*.go
