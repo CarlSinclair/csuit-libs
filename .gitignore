@@ -6,6 +6,11 @@
 !/NOTICE
 !/README.md
 !/SECURITY.md
+!/apidocs/
+/apidocs/*
+!/apidocs/*.go
+!/apidocs/*.html
+!/apidocs/*.css
 !/agentnotice/
 /agentnotice/*
 !/agentnotice/*.go

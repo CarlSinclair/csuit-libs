@@ -1,0 +1,153 @@
+<div class="apid">
+<nav class="apid-toc" aria-label="{{t "api_docs_toc"}}">
+<strong>{{t "api_docs_toc"}}</strong>
+<ul>
+<li><a href="#authentication">{{t "api_docs_auth_title"}}</a></li>
+<li><a href="#scopes">{{t "api_docs_scopes_title"}}</a></li>
+<li><a href="#conventions">{{t "api_docs_conventions_title"}}</a></li>
+<li><a href="#errors">{{t "api_docs_errors_title"}}</a></li>
+<li><a href="#pagination">{{t "api_docs_pagination_title"}}</a></li>
+<li><a href="#rate-limits">{{t "api_docs_ratelimit_title"}}</a></li>
+<li><a href="#idempotency">{{t "api_docs_idempotency_title"}}</a></li>
+{{if .Events}}<li><a href="#webhooks">{{t "api_docs_webhooks_title"}}</a></li>{{end}}
+<li><a href="#mcp">{{t "api_docs_mcp_title"}}</a></li>
+<li><a href="#reference">{{t "api_docs_reference_title"}}</a>
+<ul>
+{{range .Groups}}<li><a href="#tag-{{.Anchor}}">{{.Tag}}</a></li>
+{{end}}</ul></li>
+</ul>
+</nav>
+<div class="apid-main">
+<h1>{{.Product}} {{t "api_docs_title"}}</h1>
+<p>{{t .IntroKey}}</p>
+<p><strong>{{t "api_docs_base_url"}}</strong> <code>{{.BaseURL}}</code></p>
+<p>{{t "api_docs_openapi_text"}} <a href="{{.SpecPath}}"><code>{{.SpecPath}}</code></a></p>
+
+<h2 id="authentication">{{t "api_docs_auth_title"}}</h2>
+<p>{{t "api_docs_auth_text"}}</p>
+<pre><code>Authorization: Bearer $API_KEY</code></pre>
+<p>{{t "api_docs_auth_keys"}}</p>
+
+<h2 id="scopes">{{t "api_docs_scopes_title"}}</h2>
+<p>{{t "api_docs_scopes_text"}}</p>
+<ul class="apid-scopes">
+{{range .Scopes}}<li><code>{{.}}</code></li>
+{{end}}</ul>
+
+<h2 id="conventions">{{t "api_docs_conventions_title"}}</h2>
+<p>{{t "api_docs_conventions_text"}}</p>
+<pre><code>Content-Type: application/json; charset=utf-8</code></pre>
+
+<h2 id="errors">{{t "api_docs_errors_title"}}</h2>
+<p>{{t "api_docs_errors_text"}}</p>
+<pre><code>{
+  "error": {
+    "code": "invalid_limit",
+    "message": "limit must be a positive integer"
+  }
+}</code></pre>
+<table class="apid-table">
+<thead><tr><th>HTTP</th><th>{{t "api_docs_col_meaning"}}</th></tr></thead>
+<tbody>
+<tr><td><code>400</code></td><td>{{t "api_docs_err_400"}}</td></tr>
+<tr><td><code>401</code></td><td>{{t "api_docs_err_401"}}</td></tr>
+<tr><td><code>403</code></td><td>{{t "api_docs_err_403"}}</td></tr>
+<tr><td><code>404</code></td><td>{{t "api_docs_err_404"}}</td></tr>
+<tr><td><code>413</code></td><td>{{t "api_docs_err_413"}}</td></tr>
+<tr><td><code>429</code></td><td>{{t "api_docs_err_429"}}</td></tr>
+<tr><td><code>500</code></td><td>{{t "api_docs_err_500"}}</td></tr>
+</tbody>
+</table>
+
+<h2 id="pagination">{{t "api_docs_pagination_title"}}</h2>
+<p>{{t "api_docs_pagination_text"}}</p>
+<pre><code>GET {{.BaseURL}}/...?limit=50&amp;cursor=NEXT_CURSOR
+
+{
+  "data": [ ... ],
+  "next_cursor": "NEXT_CURSOR"
+}</code></pre>
+
+<h2 id="rate-limits">{{t "api_docs_ratelimit_title"}}</h2>
+<p>{{t "api_docs_ratelimit_text"}} <strong>{{.RateLimit}}</strong></p>
+<pre><code>X-RateLimit-Limit: {{.RateLimit}}
+Retry-After: 12</code></pre>
+
+<h2 id="idempotency">{{t "api_docs_idempotency_title"}}</h2>
+<p>{{t "api_docs_idempotency_text"}}</p>
+<pre><code>Idempotency-Key: 8f3c1f1e-6a3a-4a5c-9d2e-1f0b7e4d2a10
+Idempotent-Replay: true</code></pre>
+
+{{if .Events}}
+<h2 id="webhooks">{{t "api_docs_webhooks_title"}}</h2>
+<p>{{t "api_docs_webhooks_text"}}</p>
+<h3>{{t "api_docs_webhooks_events"}}</h3>
+<ul class="apid-scopes">
+{{range .Events}}<li><code>{{.}}</code></li>
+{{end}}</ul>
+<h3>{{t "api_docs_webhooks_payload"}}</h3>
+<pre><code>POST https://your-server.example/hooks
+Content-Type: application/json
+X-Webhook-Id: evt_0123456789abcdef0123456789abcdef
+X-Webhook-Event: {{index .Events 0}}
+X-Webhook-Timestamp: 1767225600
+X-Webhook-Signature: v1=3b2f...
+
+{
+  "id": "evt_0123456789abcdef0123456789abcdef",
+  "type": "{{index .Events 0}}",
+  "created_at": "2026-01-01T00:00:00Z",
+  "data": { ... }
+}</code></pre>
+<h3>{{t "api_docs_webhooks_verify"}}</h3>
+<p>{{t "api_docs_webhooks_verify_text"}}</p>
+<pre><code>{{.WebhookSample}}</code></pre>
+<h3>{{t "api_docs_webhooks_retries"}}</h3>
+<p>{{t "api_docs_webhooks_retries_text"}} <code>{{.RetryMinutes}}</code></p>
+{{end}}
+
+<h2 id="mcp">{{t "api_docs_mcp_title"}}</h2>
+<p>{{t "api_docs_mcp_text"}}</p>
+<pre><code>{{.BaseURL}}{{.MCPPath}}</code></pre>
+
+<h2 id="reference">{{t "api_docs_reference_title"}}</h2>
+{{range .Groups}}
+<h3 id="tag-{{.Anchor}}">{{.Tag}}</h3>
+{{range .Ops}}
+<section class="apid-op" id="{{.Anchor}}">
+<h4><span class="apid-method apid-{{lower .Method}}">{{.Method}}</span> <code>{{.Path}}</code></h4>
+<p>{{.Summary}}</p>
+<p class="apid-meta">{{t "api_docs_scope"}} <code>{{.Scope}}</code>{{if .Idempotent}} · {{t "api_docs_idempotent"}}{{end}}{{if .Paginated}} · {{t "api_docs_paginated"}}{{end}}</p>
+{{if .Params}}
+<table class="apid-table">
+<thead><tr><th>{{t "api_docs_col_name"}}</th><th>{{t "api_docs_col_in"}}</th><th>{{t "api_docs_col_required"}}</th></tr></thead>
+<tbody>
+{{range .Params}}<tr><td><code>{{.Name}}</code></td><td>{{.In}}</td><td>{{if .Required}}{{t "api_docs_yes"}}{{else}}{{t "api_docs_no"}}{{end}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+{{if .Request}}
+<h5>{{t "api_docs_request_body"}}</h5>
+<table class="apid-table">
+<thead><tr><th>{{t "api_docs_col_name"}}</th><th>{{t "api_docs_col_type"}}</th><th>{{t "api_docs_col_required"}}</th></tr></thead>
+<tbody>
+{{range .Request}}<tr><td><code>{{.Name}}</code></td><td>{{.Type}}</td><td>{{if .Required}}{{t "api_docs_yes"}}{{else}}{{t "api_docs_no"}}{{end}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+{{if .Response}}
+<h5>{{t "api_docs_response_body"}} <code>{{.Status}}</code></h5>
+<table class="apid-table">
+<thead><tr><th>{{t "api_docs_col_name"}}</th><th>{{t "api_docs_col_type"}}</th></tr></thead>
+<tbody>
+{{range .Response}}<tr><td><code>{{.Name}}</code></td><td>{{.Type}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+<h5>{{t "api_docs_example"}}</h5>
+<pre><code>{{.Curl}}</code></pre>
+</section>
+{{end}}
+{{end}}
+</div>
+</div>

@@ -1,0 +1,30 @@
+.apid{display:grid;grid-template-columns:240px minmax(0,1fr);gap:32px;max-width:1200px;margin:0 auto;padding:24px 16px;line-height:1.55}
+.apid-toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;font-size:.92rem}
+.apid-toc ul{list-style:none;margin:8px 0 0;padding-left:0}
+.apid-toc ul ul{padding-left:14px}
+.apid-toc a{text-decoration:none}
+.apid-toc a:hover{text-decoration:underline}
+.apid-main{min-width:0}
+.apid-main h2{margin-top:2.2rem;padding-top:.6rem;border-top:1px solid color-mix(in srgb,currentColor 18%,transparent)}
+.apid-main h3{margin-top:1.6rem}
+.apid-main h5{margin:1rem 0 .3rem}
+.apid code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
+.apid pre{overflow:auto;padding:12px 14px;border-radius:8px;background:color-mix(in srgb,currentColor 8%,transparent);border:1px solid color-mix(in srgb,currentColor 14%,transparent)}
+.apid pre code{font-size:.85rem}
+.apid-table{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:.92rem;display:block;overflow-x:auto}
+.apid-table th,.apid-table td{text-align:left;padding:6px 10px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);vertical-align:top}
+.apid-scopes{display:flex;flex-wrap:wrap;gap:6px 8px;list-style:none;padding:0}
+.apid-scopes li{padding:2px 8px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent)}
+.apid-op{margin:1.2rem 0;padding:14px 16px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:10px}
+.apid-op h4{margin:0 0 .4rem;font-size:1.02rem;overflow-wrap:anywhere}
+.apid-meta{font-size:.88rem;opacity:.8}
+.apid-method{display:inline-block;min-width:3.6rem;padding:1px 8px;border-radius:6px;font-size:.78rem;font-weight:700;text-align:center;color:#fff;background:#555}
+.apid-get{background:#1f7a4d}
+.apid-post{background:#1d5fc0}
+.apid-put{background:#a8651a}
+.apid-patch{background:#7b4bb5}
+.apid-delete{background:#b3302b}
+@media (max-width:820px){
+.apid{grid-template-columns:minmax(0,1fr)}
+.apid-toc{position:static;max-height:none}
+}
