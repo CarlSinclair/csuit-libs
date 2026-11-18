@@ -104,6 +104,12 @@ func Handler() http.HandlerFunc {
 			return
 		}
 
+		if isCrawler(req.UserAgent) {
+			logger.Debug("CLIENT_ERROR ignored from crawler context=%q page=%q ua=%q", truncate(req.Context, 200), pageOnly(req.URL), truncate(req.UserAgent, 120))
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		extra := ""
 		if req.Extra != nil {
 			if b, err := json.Marshal(req.Extra); err == nil {
@@ -127,6 +133,18 @@ func Handler() http.HandlerFunc {
 		)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+var crawlerMarkers = []string{"googlebot", "bingbot", "adsbot-google", "google-inspectiontool", "googleother", "duckduckbot", "yandexbot", "baiduspider", "applebot", "facebookexternalhit", "slurp"}
+
+func isCrawler(ua string) bool {
+	ua = strings.ToLower(ua)
+	for _, m := range crawlerMarkers {
+		if strings.Contains(ua, m) {
+			return true
+		}
+	}
+	return false
 }
 
 func extraMessage(extra interface{}) string {
