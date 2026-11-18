@@ -37,12 +37,62 @@ var (
 	alertDirty  bool
 )
 
-func alertStatePath() (string, error) {
+type AlertStateStore interface {
+	Load() ([]byte, error)
+	Save([]byte) error
+}
+
+var alertStore AlertStateStore
+
+func SetAlertStateStore(s AlertStateStore) {
+	alertMu.Lock()
+	alertStore = s
+	alertLoaded = false
+	alertMu.Unlock()
+}
+
+type fileAlertStore struct{ path string }
+
+func FileAlertStore(dir string) AlertStateStore {
+	return fileAlertStore{path: filepath.Join(dir, alertStateFile)}
+}
+
+func (f fileAlertStore) Load() ([]byte, error) {
+	raw, err := os.ReadFile(f.path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", f.path, err)
+	}
+	return raw, nil
+}
+
+func (f fileAlertStore) Save(raw []byte) error {
+	if err := EnsureDir(filepath.Dir(f.path), 0o770); err != nil {
+		if _, serr := os.Stat(filepath.Dir(f.path)); serr != nil {
+			return err
+		}
+	}
+	tmp := f.path + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o660); err != nil {
+		return fmt.Errorf("writing %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, f.path); err != nil {
+		return fmt.Errorf("renaming %s: %w", tmp, err)
+	}
+	return nil
+}
+
+func currentAlertStore() (AlertStateStore, error) {
+	if alertStore != nil {
+		return alertStore, nil
+	}
 	dir, err := AppRootDir()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return filepath.Join(dir, "spool", alertStateFile), nil
+	return FileAlertStore(filepath.Join(dir, "spool")), nil
 }
 
 func alertLoadLocked() {
@@ -50,21 +100,22 @@ func alertLoadLocked() {
 		return
 	}
 	alertLoaded = true
-	path, err := alertStatePath()
+	st, err := currentAlertStore()
 	if err != nil {
-		log.Printf("ALERT DEDUPE: state path unavailable, dedupe is memory-only: %v", err)
+		log.Printf("ALERT DEDUPE: state store unavailable, dedupe is memory-only: %v", err)
 		return
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := st.Load()
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("ALERT DEDUPE: reading %s failed, starting empty: %v", path, err)
-		}
+		log.Printf("ALERT DEDUPE: loading state failed, starting empty: %v", err)
+		return
+	}
+	if len(raw) == 0 {
 		return
 	}
 	var loaded map[string]*alertEntry
 	if err := json.Unmarshal(raw, &loaded); err != nil {
-		log.Printf("ALERT DEDUPE: %s is corrupt, starting empty: %v", path, err)
+		log.Printf("ALERT DEDUPE: stored state is corrupt, starting empty: %v", err)
 		return
 	}
 	for k, e := range loaded {
@@ -78,8 +129,9 @@ func alertSaveLocked() {
 	if !alertDirty {
 		return
 	}
-	path, err := alertStatePath()
+	st, err := currentAlertStore()
 	if err != nil {
+		log.Printf("ALERT DEDUPE: state store unavailable, state not persisted: %v", err)
 		return
 	}
 	raw, err := json.Marshal(alertSeen)
@@ -87,19 +139,8 @@ func alertSaveLocked() {
 		log.Printf("ALERT DEDUPE: encoding state failed: %v", err)
 		return
 	}
-	if err := EnsureDir(filepath.Dir(path), 0o770); err != nil {
-		log.Printf("ALERT DEDUPE: %v", err)
-		if _, serr := os.Stat(filepath.Dir(path)); serr != nil {
-			return
-		}
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o660); err != nil {
-		log.Printf("ALERT DEDUPE: writing %s failed, state not persisted: %v", tmp, err)
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		log.Printf("ALERT DEDUPE: renaming %s failed, state not persisted: %v", tmp, err)
+	if err := st.Save(raw); err != nil {
+		log.Printf("ALERT DEDUPE: state not persisted: %v", err)
 		return
 	}
 	alertDirty = false
