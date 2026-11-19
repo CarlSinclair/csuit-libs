@@ -174,3 +174,17 @@
 !/pdfkit/
 /pdfkit/*
 !/pdfkit/*.go
+!/pdfkit/fonts/
+/pdfkit/fonts/*
+!/pdfkit/fonts/*.ttf
+!/pdfkit/fonts/LICENSE-DejaVu
+!/filesig/
+/filesig/*
+!/filesig/*.go
+!/sanitizer/
+/sanitizer/*
+!/sanitizer/*.go
+!/sanitizer/encoder/
+/sanitizer/encoder/*
+!/sanitizer/encoder/encode.sh
+!/sanitizer/encoder/encode.yml

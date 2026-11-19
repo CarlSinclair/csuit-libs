@@ -1,0 +1,41 @@
+name: encode
+on:
+  workflow_dispatch:
+    inputs:
+      job_id: { required: true }
+      source_url: { required: true }
+      upload_base: { required: true }
+      callback_url: { required: true }
+      token: { required: true }
+      max_seconds: { required: true }
+      mode: { required: false, default: hls }
+concurrency:
+  group: encode
+  cancel-in-progress: false
+jobs:
+  encode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: mask
+        env:
+          TOKEN: ${{ github.event.inputs.token }}
+          SOURCE_URL: ${{ github.event.inputs.source_url }}
+          UPLOAD_BASE: ${{ github.event.inputs.upload_base }}
+          CALLBACK_URL: ${{ github.event.inputs.callback_url }}
+        run: |
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$SOURCE_URL"
+          echo "::add-mask::$UPLOAD_BASE"
+          echo "::add-mask::$CALLBACK_URL"
+      - name: encode
+        env:
+          SOURCE_URL: ${{ github.event.inputs.source_url }}
+          UPLOAD_BASE: ${{ github.event.inputs.upload_base }}
+          CALLBACK_URL: ${{ github.event.inputs.callback_url }}
+          TOKEN: ${{ github.event.inputs.token }}
+          MAX_SECONDS: ${{ github.event.inputs.max_seconds }}
+          MODE: ${{ github.event.inputs.mode }}
+          THREADS: "2"
+        run: bash encode.sh

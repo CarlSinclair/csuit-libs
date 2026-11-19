@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/cors"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
@@ -282,6 +285,111 @@ func (s *Store) Presign(ctx context.Context, key string, ttl time.Duration) (str
 		return "", fmt.Errorf("objstore: presign %q in bucket %q: %w", key, s.bucket, err)
 	}
 	return u.String(), nil
+}
+
+// PresignPut returns a URL that accepts one PUT of the object, so a browser or a
+// remote worker can upload straight to the bucket without the bytes passing
+// through this application. A single PUT is limited to 5 GB by the S3 API.
+func (s *Store) PresignPut(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	fk, err := s.full(key)
+	if err != nil {
+		return "", err
+	}
+	if ttl <= 0 || ttl > 7*24*time.Hour {
+		ttl = time.Hour
+	}
+	u, err := s.cl.PresignedPutObject(ctx, s.bucket, fk, ttl)
+	if err != nil {
+		return "", fmt.Errorf("objstore: presign put %q in bucket %q: %w", key, s.bucket, err)
+	}
+	return u.String(), nil
+}
+
+// Part is one finished piece of a multipart upload.
+type Part struct {
+	Number int
+	ETag   string
+}
+
+// NewMultipart starts a multipart upload and returns its upload id.
+func (s *Store) NewMultipart(ctx context.Context, key string) (string, error) {
+	fk, err := s.full(key)
+	if err != nil {
+		return "", err
+	}
+	id, err := minio.Core{Client: s.cl}.NewMultipartUpload(ctx, s.bucket, fk, minio.PutObjectOptions{})
+	if err != nil {
+		return "", fmt.Errorf("objstore: start multipart upload %q in bucket %q: %w", key, s.bucket, err)
+	}
+	return id, nil
+}
+
+// PresignPart returns a URL that accepts the PUT of one part of a multipart upload.
+func (s *Store) PresignPart(ctx context.Context, key, uploadID string, part int, ttl time.Duration) (string, error) {
+	fk, err := s.full(key)
+	if err != nil {
+		return "", err
+	}
+	if ttl <= 0 || ttl > 7*24*time.Hour {
+		ttl = time.Hour
+	}
+	q := url.Values{}
+	q.Set("uploadId", uploadID)
+	q.Set("partNumber", strconv.Itoa(part))
+	u, err := s.cl.Presign(ctx, http.MethodPut, s.bucket, fk, ttl, q)
+	if err != nil {
+		return "", fmt.Errorf("objstore: presign part %d of %q: %w", part, key, err)
+	}
+	return u.String(), nil
+}
+
+// CompleteMultipart joins the uploaded parts into the final object.
+func (s *Store) CompleteMultipart(ctx context.Context, key, uploadID string, parts []Part) error {
+	fk, err := s.full(key)
+	if err != nil {
+		return err
+	}
+	cp := make([]minio.CompletePart, len(parts))
+	for i, p := range parts {
+		cp[i] = minio.CompletePart{PartNumber: p.Number, ETag: p.ETag}
+	}
+	if _, err := (minio.Core{Client: s.cl}).CompleteMultipartUpload(ctx, s.bucket, fk, uploadID, cp, minio.PutObjectOptions{}); err != nil {
+		return fmt.Errorf("objstore: complete multipart upload %q: %w", key, err)
+	}
+	return nil
+}
+
+// AbortMultipart discards an unfinished multipart upload and its stored parts.
+func (s *Store) AbortMultipart(ctx context.Context, key, uploadID string) error {
+	fk, err := s.full(key)
+	if err != nil {
+		return err
+	}
+	if err := (minio.Core{Client: s.cl}).AbortMultipartUpload(ctx, s.bucket, fk, uploadID); err != nil {
+		return fmt.Errorf("objstore: abort multipart upload %q: %w", key, err)
+	}
+	return nil
+}
+
+// EnsureCORS makes the bucket accept browser PUT uploads from the given
+// origins, exposing ETag so multipart parts can be completed. It replaces the
+// bucket's CORS rules, so list every origin that needs access.
+func (s *Store) EnsureCORS(ctx context.Context, origins []string) error {
+	if len(origins) == 0 {
+		return fmt.Errorf("objstore: no origins given for the CORS rule")
+	}
+	cfg := cors.NewConfig([]cors.Rule{{
+		ID:            "browser-uploads",
+		AllowedOrigin: origins,
+		AllowedMethod: []string{"PUT", "GET", "HEAD"},
+		AllowedHeader: []string{"Content-Type"},
+		ExposeHeader:  []string{"ETag"},
+		MaxAgeSeconds: 3600,
+	}})
+	if err := s.cl.SetBucketCors(ctx, s.bucket, cfg); err != nil {
+		return fmt.Errorf("objstore: set CORS on bucket %q (the access key needs bucket admin rights): %w", s.bucket, err)
+	}
+	return nil
 }
 
 var contentTypes = map[string]string{
