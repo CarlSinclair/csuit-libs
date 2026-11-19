@@ -116,6 +116,9 @@
 !/session/
 /session/*
 !/session/*.go
+!/sessionstore/
+/sessionstore/*
+!/sessionstore/*.go
 !/sqlretry/
 /sqlretry/*
 !/sqlretry/*.go
