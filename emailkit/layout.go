@@ -9,13 +9,14 @@ import (
 )
 
 type Page struct {
-	Lang      string
-	Title     string
-	Rights    string
-	Footer    template.HTML
-	BrandURL  string
-	PoweredBy template.HTML
-	Year      int
+	Lang             string
+	Title            string
+	Rights           string
+	Footer           template.HTML
+	BrandURL         string
+	PoweredBy        template.HTML
+	PoweredByLogoURL string
+	Year             int
 }
 
 func esc(v any) string {
@@ -93,7 +94,11 @@ func Wrap(th Theme, p Page, body template.HTML) template.HTML {
 		b.WriteString(`<div style="margin-top:6px;">` + string(p.Footer) + `</div>`)
 	}
 	if string(p.PoweredBy) != "" {
-		b.WriteString(`<div style="margin-top:6px;">` + string(p.PoweredBy) + `</div>`)
+		b.WriteString(`<div style="margin-top:6px;">` + string(p.PoweredBy))
+		if logo := safeURL(p.PoweredByLogoURL); strings.TrimSpace(p.PoweredByLogoURL) != "" && logo != "#" {
+			b.WriteString(` <img src="` + logo + `" alt="" width="16" height="16" style="display:inline-block;vertical-align:middle;border:0;width:16px;height:16px;">`)
+		}
+		b.WriteString(`</div>`)
 	}
 	b.WriteString(`</td></tr></table></td></tr></table></body></html>`)
 	return template.HTML(b.String())

@@ -1,6 +1,7 @@
 package emailkit
 
 import (
+	"html/template"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -37,5 +38,21 @@ func TestRenderWrapsFragment(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output", want)
 		}
+	}
+}
+
+func TestWrapPoweredByLogo(t *testing.T) {
+	th := Platform("Brand")
+	out := string(Wrap(th, Page{PoweredBy: template.HTML("Powered by X"), PoweredByLogoURL: "https://example.com/l.png"}, template.HTML("body")))
+	if !strings.Contains(out, `<img src="https://example.com/l.png"`) {
+		t.Fatalf("powered-by logo missing: %s", out)
+	}
+	out = string(Wrap(th, Page{PoweredBy: template.HTML("Powered by X"), PoweredByLogoURL: "javascript:alert(1)"}, template.HTML("body")))
+	if strings.Contains(out, "javascript") {
+		t.Fatalf("unsafe logo url rendered: %s", out)
+	}
+	out = string(Wrap(th, Page{PoweredByLogoURL: "https://example.com/l.png"}, template.HTML("body")))
+	if strings.Contains(out, "l.png") {
+		t.Fatalf("logo rendered without powered-by text: %s", out)
 	}
 }
