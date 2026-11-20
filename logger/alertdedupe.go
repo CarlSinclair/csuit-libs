@@ -48,11 +48,7 @@ func SetAlertStateStore(s AlertStateStore) {
 	alertMu.Unlock()
 }
 
-func currentAlertStore() AlertStateStore {
-	alertStoreMu.Lock()
-	defer alertStoreMu.Unlock()
-	return alertStore
-}
+func currentAlertStore() AlertStateStore { return alertStore }
 
 func alertLoadLocked() {
 	if alertLoaded {
