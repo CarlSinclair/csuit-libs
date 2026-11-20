@@ -269,3 +269,17 @@ func LanguageSuggestions(viewer string) []string {
 	suggestionCache.Store(viewer, out)
 	return out
 }
+
+// NativeName is the language's own name, e.g. "Português" for pt.
+func NativeName(code string) string {
+	t, err := language.Parse(code)
+	if err != nil {
+		return code
+	}
+	name := display.Self.Name(t)
+	if name == "" {
+		return code
+	}
+	r, size := utf8.DecodeRuneInString(name)
+	return string(unicode.ToUpper(r)) + name[size:]
+}

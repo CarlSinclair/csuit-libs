@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -18,7 +16,6 @@ const (
 	alertQuietReset = 10 * time.Minute
 	alertMaxKeys    = 2000
 	alertSampleMax  = 400
-	alertStateFile  = "alert-dedupe.json"
 )
 
 type alertEntry struct {
@@ -51,48 +48,10 @@ func SetAlertStateStore(s AlertStateStore) {
 	alertMu.Unlock()
 }
 
-type fileAlertStore struct{ path string }
-
-func FileAlertStore(dir string) AlertStateStore {
-	return fileAlertStore{path: filepath.Join(dir, alertStateFile)}
-}
-
-func (f fileAlertStore) Load() ([]byte, error) {
-	raw, err := os.ReadFile(f.path)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", f.path, err)
-	}
-	return raw, nil
-}
-
-func (f fileAlertStore) Save(raw []byte) error {
-	if err := EnsureDir(filepath.Dir(f.path), 0o770); err != nil {
-		if _, serr := os.Stat(filepath.Dir(f.path)); serr != nil {
-			return err
-		}
-	}
-	tmp := f.path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o660); err != nil {
-		return fmt.Errorf("writing %s: %w", tmp, err)
-	}
-	if err := os.Rename(tmp, f.path); err != nil {
-		return fmt.Errorf("renaming %s: %w", tmp, err)
-	}
-	return nil
-}
-
-func currentAlertStore() (AlertStateStore, error) {
-	if alertStore != nil {
-		return alertStore, nil
-	}
-	dir, err := AppRootDir()
-	if err != nil {
-		return nil, err
-	}
-	return FileAlertStore(filepath.Join(dir, "spool")), nil
+func currentAlertStore() AlertStateStore {
+	alertStoreMu.Lock()
+	defer alertStoreMu.Unlock()
+	return alertStore
 }
 
 func alertLoadLocked() {
@@ -100,9 +59,8 @@ func alertLoadLocked() {
 		return
 	}
 	alertLoaded = true
-	st, err := currentAlertStore()
-	if err != nil {
-		log.Printf("ALERT DEDUPE: state store unavailable, dedupe is memory-only: %v", err)
+	st := currentAlertStore()
+	if st == nil {
 		return
 	}
 	raw, err := st.Load()
@@ -129,9 +87,9 @@ func alertSaveLocked() {
 	if !alertDirty {
 		return
 	}
-	st, err := currentAlertStore()
-	if err != nil {
-		log.Printf("ALERT DEDUPE: state store unavailable, state not persisted: %v", err)
+	st := currentAlertStore()
+	if st == nil {
+		alertDirty = false
 		return
 	}
 	raw, err := json.Marshal(alertSeen)

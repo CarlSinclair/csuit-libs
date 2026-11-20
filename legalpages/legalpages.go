@@ -100,8 +100,9 @@ type Resolved struct {
 
 // Alt is one hreflang alternate.
 type Alt struct {
-	Lang string
-	Slug string
+	Lang  string
+	Slug  string
+	Label string
 }
 
 // Store is the CRUD surface over one *_pages table.
@@ -280,6 +281,7 @@ func (s Store) Lookup(slug string) (Resolved, bool, error) {
 			continue
 		}
 		if !IsPrivateLang(a.Lang) {
+			a.Label = NativeName(a.Lang)
 			r.Alternates = append(r.Alternates, a)
 		}
 	}
@@ -777,4 +779,21 @@ func ReservedFromMux(mux *http.ServeMux) func(string) bool {
 		_, pattern := mux.Handler(&http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/" + strings.ToLower(slug)}})
 		return pattern != "" && pattern != "/" && pattern != "/{slug}"
 	}
+}
+
+// PreferLang returns the sibling variant of res written in want when one
+// exists, otherwise res unchanged. resolve loads a variant by slug.
+func PreferLang(res Resolved, want string, resolve func(slug string) (Resolved, bool)) Resolved {
+	if want == "" || SameLang(res.Lang, want) {
+		return res
+	}
+	for _, a := range res.Alternates {
+		if SameLang(a.Lang, want) {
+			if alt, ok := resolve(a.Slug); ok && strings.TrimSpace(alt.Body) != "" {
+				return alt
+			}
+			break
+		}
+	}
+	return res
 }
