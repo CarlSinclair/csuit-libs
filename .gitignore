@@ -191,3 +191,9 @@
 /sanitizer/encoder/*
 !/sanitizer/encoder/encode.sh
 !/sanitizer/encoder/encode.yml
+!/postal/
+/postal/*
+!/postal/*.go
+!/vendorsync/
+/vendorsync/*
+!/vendorsync/vendor-sync.sh

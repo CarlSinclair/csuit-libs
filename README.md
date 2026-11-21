@@ -19,6 +19,7 @@ Requires Go 1.26 or newer.
 - authkit: hashed one-time tokens, recovery codes, HS256 JWT sign/verify, the 2FA-pending token and HMAC payload signatures (no database access)
 - session: database-backed sessions with a Redis cache
 - sqlretry: retries for transient SQLite errors
+- postal: postal-code lookup (Brazil live via ViaCEP with BrasilAPI fallback, other countries from locally installed GeoNames files; no third-party call at request time)
 - telegram: Bot API client with pacing, retry handling, token validation (`GetMe`) and login verification, plus one in-memory send queue per bot token
 - telegram/durable: optional Redis-backed Telegram queue with a worker, so messages survive a restart
 

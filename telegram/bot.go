@@ -590,12 +590,19 @@ func (b *Bot) SendWithMode(ctx context.Context, chatID, text, parseMode string) 
 }
 
 type ChatInfo struct {
-	ID        int64  `json:"id"`
-	Type      string `json:"type"`
-	Username  string `json:"username"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Title     string `json:"title"`
+	ID        int64      `json:"id"`
+	Type      string     `json:"type"`
+	Username  string     `json:"username"`
+	FirstName string     `json:"first_name"`
+	LastName  string     `json:"last_name"`
+	Title     string     `json:"title"`
+	Photo     *ChatPhoto `json:"photo,omitempty"`
+}
+
+// ChatPhoto holds the file ids of a chat's profile photo as returned by getChat.
+type ChatPhoto struct {
+	SmallFileID string `json:"small_file_id"`
+	BigFileID   string `json:"big_file_id"`
 }
 
 func (b *Bot) GetChat(ctx context.Context, chatID string) (ChatInfo, error) {
@@ -627,4 +634,52 @@ func (b *Bot) SendPayload(ctx context.Context, chatID string, payload map[string
 
 func (b *Bot) SendHTMLRaw(ctx context.Context, chatID, text string) error {
 	return b.SendWithMode(ctx, chatID, text, "HTML")
+}
+
+// GetFile resolves a file id to the path used to download it.
+func (b *Bot) GetFile(ctx context.Context, fileID string) (string, error) {
+	raw, err := b.callResult(ctx, "getFile", map[string]any{"file_id": fileID})
+	if err != nil {
+		return "", fmt.Errorf("telegram getFile: %w", err)
+	}
+	var out struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil || out.FilePath == "" {
+		return "", fmt.Errorf("telegram getFile: bad result")
+	}
+	return out.FilePath, nil
+}
+
+// DownloadFile fetches a file by the path from GetFile through the same base
+// URL as every other call. The base must forward /file/bot<token>/<path>.
+// It refuses bodies larger than maxBytes.
+func (b *Bot) DownloadFile(ctx context.Context, filePath string, maxBytes int64) ([]byte, string, error) {
+	if b == nil || b.Token == "" {
+		return nil, "", ErrNotConfigured
+	}
+	base := b.base()
+	if base == "" {
+		return nil, "", ErrNoProxyBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/file/bot"+b.Token+"/"+strings.TrimLeft(filePath, "/"), nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("telegram download request: %w", err)
+	}
+	resp, err := b.http.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("telegram download: %w", scrub(err, b.Token))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("telegram download: status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("telegram download: read: %w", scrub(err, b.Token))
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, "", fmt.Errorf("telegram download: file larger than %d bytes", maxBytes)
+	}
+	return data, resp.Header.Get("Content-Type"), nil
 }
