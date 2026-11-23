@@ -18,6 +18,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
@@ -40,6 +41,7 @@ class NativeNav(
         val accent: Int,
         val barBg: Int,
         val barText: Int,
+        val pageBg: Int,
         val title: String,
         val menuLabel: String,
         val accountLabel: String,
@@ -55,6 +57,7 @@ class NativeNav(
     private val handler = Handler(Looper.getMainLooper())
     private val density = activity.resources.displayMetrics.density
     private var hasNav = false
+    private var inset = androidx.core.graphics.Insets.NONE
 
     val root = DrawerLayout(activity)
     private val content = LinearLayout(activity)
@@ -72,9 +75,14 @@ class NativeNav(
         root.addView(leftPanel, DrawerLayout.LayoutParams(dp(300), ViewGroup.LayoutParams.MATCH_PARENT).apply { gravity = GravityCompat.START })
         root.addView(rightPanel, DrawerLayout.LayoutParams(dp(300), ViewGroup.LayoutParams.MATCH_PARENT).apply { gravity = GravityCompat.END })
         lock(true)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+        WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            inset = bars
+            content.setPadding(bars.left, bars.top, bars.right, 0)
+            bottomBar.setPadding(0, 0, 0, bars.bottom)
+            leftPanel.setPadding(bars.left, bars.top, 0, bars.bottom)
+            rightPanel.setPadding(0, bars.top, bars.right, bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
     }
@@ -175,8 +183,9 @@ class NativeNav(
             sidebarBg = color(c.optString("sidebarBg"), COLOR_SIDEBAR_BG),
             sidebarText = color(c.optString("sidebarText"), COLOR_SIDEBAR_TEXT),
             accent = color(c.optString("accent"), COLOR_ACCENT),
-            barBg = color(c.optString("card"), COLOR_SIDEBAR_BG),
+            barBg = color(c.optString("bg"), COLOR_SIDEBAR_BG),
             barText = color(c.optString("text"), COLOR_SIDEBAR_TEXT),
+            pageBg = color(c.optString("bg"), COLOR_SIDEBAR_BG),
             title = o.optString("title"),
             menuLabel = o.optString("menuLabel"),
             accountLabel = acct?.optString("label").orEmpty(),
@@ -196,6 +205,10 @@ class NativeNav(
     }
 
     private fun build(s: State) {
+        root.setBackgroundColor(s.pageBg)
+        content.setBackgroundColor(s.pageBg)
+        WindowCompat.getInsetsController(activity.window, root).isAppearanceLightStatusBars = Color.luminance(s.pageBg) > 0.5f
+        WindowCompat.getInsetsController(activity.window, root).isAppearanceLightNavigationBars = Color.luminance(s.pageBg) > 0.5f
         buildBottomBar(s)
         buildLeft(s)
         buildRight(s)
@@ -205,6 +218,7 @@ class NativeNav(
         bottomBar.removeAllViews()
         bottomBar.setBackgroundColor(s.barBg)
         bottomBar.elevation = dp(8).toFloat()
+        bottomBar.dividerDrawable = null
         val links = s.entries.mapNotNull { it.link }
         val picked = bottomPaths.mapNotNull { p -> links.firstOrNull { pathOf(it.href) == p } }.take(3)
         val destinations = if (picked.size >= 2) picked else links.take(3)
@@ -319,7 +333,7 @@ class NativeNav(
 
         if (s.hasBell) {
             val label = if (s.unread.isNotEmpty()) "${s.bellLabel} (${s.unread})" else s.bellLabel
-            col.addView(row(s, "fa-bell", label, false) { go("/notifications") })
+            col.addView(row(s, "fa-bell", label, false) { openBell() })
         }
         for (a in s.accountItems) {
             col.addView(row(s, a.icon, a.label, false) { clickAccount(a.index) })
@@ -390,6 +404,15 @@ class NativeNav(
         }
     }
 
+    private fun openBell() {
+        root.closeDrawers()
+        webView.evaluateJavascript(
+            "(function(){var b=document.querySelector('.fixed-auth-area .nk-button');if(b){b.click();return 1;}return 0;})()",
+        ) { result ->
+            if (result != "1") Log.e(TAG, "notification bell not found on the page")
+        }
+    }
+
     private fun toggleDark() {
         webView.evaluateJavascript("(function(){var e=document.getElementById('dswitch');if(e){e.click();return 1;}return 0;})()") { result ->
             if (result != "1") Log.e(TAG, "dark mode switch not found on the page")
@@ -416,15 +439,16 @@ class NativeNav(
 
         private const val HIDE_JS =
             "(function(){try{if(window.__shellNavHide)return;window.__shellNavHide=1;var s=new CSSStyleSheet();" +
-                "s.replaceSync('.admin-sidebar,.admin-topbar-nav-toggle,.fixed-auth-area .nk-root,#dark-switch,.account-dropdown{display:none!important}" +
-                ".admin-content{margin-inline-start:0!important;width:100%!important;padding-top:16px!important}" +
+                "s.replaceSync('.admin-sidebar,.admin-topbar-nav-toggle,.fixed-auth-area .nk-button,#dark-switch,.account-dropdown,.admin-content h1{display:none!important}" +
+                ".admin-content{margin-inline-start:0!important;width:100%!important;max-width:100%!important;padding:8px!important;min-height:0!important}" +
                 ".admin-shell-offset{padding-top:0!important}');" +
                 "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);}catch(e){}})()"
 
         private const val SCRAPE_JS =
             "(function(){" +
-                "function cv(n){var v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();if(!v)return '';" +
+                "function cv(n){var v=getComputedStyle(document.body).getPropertyValue(n).trim();if(!v)return '';" +
                 "var e=document.createElement('span');e.style.color=v;document.body.appendChild(e);var c=getComputedStyle(e).color;e.remove();return c;}" +
+                "function pc(p){var m=document.querySelector('.admin-content')||document.body;return getComputedStyle(m)[p===\'color\'?\'color\':\'backgroundColor\'];}" +
                 "function ic(root){var u=root.querySelector('use');var h=u?u.getAttribute('href'):'';return h&&h.indexOf('#')>=0?h.split('#')[1]:'';}" +
                 "var side=document.querySelector('#admin-sidebar .sidebar-nav');" +
                 "var drop=document.querySelector('.account-dropdown-menu');" +
@@ -443,7 +467,7 @@ class NativeNav(
                 "bl={label:bb?(bb.getAttribute('aria-label')||''):'',unread:bg&&!bg.hidden?bg.textContent.trim():''};}" +
                 "var tg=document.querySelector('.admin-topbar-nav-toggle');var th=document.querySelector('#admin-sidebar .sidebar-header h2');" +
                 "var ds=document.getElementById('dswitch');" +
-                "var o={colors:{sidebarBg:cv('--sidebar-bg'),sidebarText:cv('--sidebar-text'),accent:cv('--primary-color'),card:cv('--card-bg'),text:cv('--text-color')}," +
+                "var o={colors:{sidebarBg:cv('--sidebar-bg'),sidebarText:cv('--sidebar-text'),accent:cv('--primary-color'),bg:pc('background-color'),text:pc('color')}," +
                 "title:th?th.textContent.trim():'',menuLabel:tg?(tg.getAttribute('aria-label')||''):'',items:items,acct:acct,bell:bl};" +
                 "if(ds)o.dark=!!ds.checked;" +
                 "return JSON.stringify(o);})()"
