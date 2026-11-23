@@ -20,6 +20,7 @@ Requires Go 1.26 or newer.
 - session: database-backed sessions with a Redis cache
 - sqlretry: retries for transient SQLite errors
 - postal: postal-code lookup (Brazil live via ViaCEP with BrasilAPI fallback, other countries from locally installed GeoNames files; no third-party call at request time)
+- phonekit: shared phone input script (country code field with flag, national number, hidden E.164 value); served from one path in every product
 - telegram: Bot API client with pacing, retry handling, token validation (`GetMe`) and login verification, plus one in-memory send queue per bot token
 - telegram/durable: optional Redis-backed Telegram queue with a worker, so messages survive a restart
 

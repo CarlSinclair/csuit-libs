@@ -197,3 +197,7 @@
 !/vendorsync/
 /vendorsync/*
 !/vendorsync/vendor-sync.sh
+!/phonekit/
+/phonekit/*
+!/phonekit/*.go
+!/phonekit/phone-input.js
