@@ -3,8 +3,9 @@
 
   var SCRIPT_SRC = (document.currentScript && document.currentScript.src) || "";
   var FLAG_BASE = "/static/vendor/flags/";
+  var FLAG_OVERRIDE = (document.currentScript && document.currentScript.getAttribute("data-flag-base")) || "";
   try {
-    if (SCRIPT_SRC) FLAG_BASE = new URL("/static/vendor/flags/", SCRIPT_SRC).href;
+    if (SCRIPT_SRC) FLAG_BASE = new URL(FLAG_OVERRIDE || "/static/vendor/flags/", SCRIPT_SRC).href;
   } catch (err) {
     console.error("phone-input.js: cannot derive flag base from script URL", err);
   }
