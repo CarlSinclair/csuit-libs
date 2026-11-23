@@ -362,6 +362,27 @@ func (s *Service) TagSession(refreshToken, location, userAgent string) {
 	}
 }
 
+var dbTimeLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05"}
+
+func dbTime(v any) (time.Time, error) {
+	switch t := v.(type) {
+	case time.Time:
+		return t, nil
+	case int64:
+		return time.Unix(t, 0).UTC(), nil
+	case []byte:
+		return dbTime(string(t))
+	case string:
+		for _, l := range dbTimeLayouts {
+			if at, err := time.Parse(l, t); err == nil {
+				return at, nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("unrecognised time %q", t)
+	}
+	return time.Time{}, fmt.Errorf("unsupported time value of type %T", v)
+}
+
 type SessionInfo struct {
 	ID        int64
 	Location  string
@@ -393,9 +414,15 @@ func (s *Service) ListSessions(userID int64, currentRefresh string) ([]SessionIn
 	var out []SessionInfo
 	for rows.Next() {
 		var si SessionInfo
-		if err := rows.Scan(&si.ID, &si.Location, &si.UserAgent, &si.StartedAt, &si.Current); err != nil {
+		var started any
+		if err := rows.Scan(&si.ID, &si.Location, &si.UserAgent, &started, &si.Current); err != nil {
 			return nil, fmt.Errorf("scan session uid=%d: %w", userID, err)
 		}
+		at, err := dbTime(started)
+		if err != nil {
+			return nil, fmt.Errorf("session uid=%d id=%d started_at: %w", userID, si.ID, err)
+		}
+		si.StartedAt = at
 		out = append(out, si)
 	}
 	return out, rows.Err()
