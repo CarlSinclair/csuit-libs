@@ -204,3 +204,6 @@
 !/baseurl/
 /baseurl/*
 !/baseurl/*.go
+!/emailchange/
+/emailchange/*
+!/emailchange/*.go
