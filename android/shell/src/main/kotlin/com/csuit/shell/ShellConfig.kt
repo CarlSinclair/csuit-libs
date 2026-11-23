@@ -7,6 +7,8 @@ data class ShellConfig(
     val pushChannelName: String,
     val youTubeSync: Boolean = false,
     val mediaScrobble: Boolean = false,
+    val nativeNav: Boolean = false,
+    val bottomNavPaths: List<String> = emptyList(),
     val scrobbleServices: Map<String, String> = ScrobbleServices.DEFAULT,
 ) {
     init {
