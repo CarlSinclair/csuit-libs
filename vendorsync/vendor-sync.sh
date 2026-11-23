@@ -21,9 +21,22 @@ def get(url, limit=16 << 20):
         raise RuntimeError("response too large: " + url)
     return data
 
-def latest(pkg):
-    data = json.loads(get("https://registry.npmjs.org/" + urllib.parse.quote(pkg, safe="@") + "/latest"))
-    return data["version"]
+def latest(pkg, major=""):
+    quoted = urllib.parse.quote(pkg, safe="@")
+    if not major:
+        return json.loads(get("https://registry.npmjs.org/" + quoted + "/latest"))["version"]
+    doc = json.loads(get("https://registry.npmjs.org/" + quoted, 64 << 20))
+    best = None
+    for v in doc.get("versions", {}):
+        parts = v.split(".")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts) or parts[0] != str(major):
+            continue
+        t = tuple(int(p) for p in parts)
+        if best is None or t > best[0]:
+            best = (t, v)
+    if best is None:
+        raise RuntimeError("no release in major " + str(major))
+    return best[1]
 
 def sane(path, data, old):
     if not data:
@@ -46,7 +59,7 @@ for item in doc["items"]:
         continue
     cur = item.get("version", "")
     try:
-        new = latest(item["npm"])
+        new = latest(item["npm"], item.get("pin_major", ""))
     except Exception as e:
         print(f"vendor-sync: ERROR {name}: registry lookup failed: {e}", file=sys.stderr)
         rc = 2
