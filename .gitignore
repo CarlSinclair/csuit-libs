@@ -201,3 +201,6 @@
 /phonekit/*
 !/phonekit/*.go
 !/phonekit/phone-input.js
+!/baseurl/
+/baseurl/*
+!/baseurl/*.go
