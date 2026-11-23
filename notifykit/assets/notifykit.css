@@ -30,3 +30,4 @@
 .nk-btn{padding:6px 12px;border:1px solid var(--nk-line);border-radius:6px;background:var(--nk-bg);color:var(--nk-fg);cursor:pointer;font:inherit}
 .nk-btn:disabled{opacity:.5;cursor:default}
 .nk-row{border-bottom:1px solid var(--nk-line)}.nk-row .nk-item{border-bottom:0}
+@media (max-width:640px){.nk-panel{position:fixed;left:8px;right:8px;top:auto;width:auto;max-width:none}.nk-body{max-height:min(380px,60vh)}}
