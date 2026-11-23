@@ -75,7 +75,7 @@ class InstanceActivity : AppCompatActivity() {
             setHint(R.string.shell_instance_hint)
             setTextColor(text)
             setHintTextColor(withAlpha(text, 110))
-            background = null
+            this.background = null
             textSize = 17f
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             imeOptions = EditorInfo.IME_ACTION_DONE
