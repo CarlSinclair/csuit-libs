@@ -362,7 +362,7 @@ func (s *Service) TagSession(refreshToken, location, userAgent string) {
 	}
 }
 
-var dbTimeLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05"}
+var dbTimeLayouts = []string{"2006-01-02 15:04:05.999999999 -0700 MST", time.RFC3339Nano, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999", "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05"}
 
 func dbTime(v any) (time.Time, error) {
 	switch t := v.(type) {
