@@ -34,7 +34,7 @@ func TestRenderWrapsFragment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`<html lang="pt">`, `name="viewport"`, `&lt;b&gt;Hi&lt;/b&gt;`, `href="#"`, `&copy; 2026 Brand. All rights reserved.`} {
+	for _, want := range []string{`<html lang="pt">`, `name="viewport"`, `Brand &lt;b&gt;Hi&lt;/b&gt;`, `href="#"`, `&copy; 2026 Brand. All rights reserved.`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output", want)
 		}

@@ -108,7 +108,11 @@ func Funcs(th Theme) template.FuncMap {
 	return template.FuncMap{
 		"th": func() Theme { return th },
 		"heading": func(v any) template.HTML {
-			return template.HTML(`<h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;color:` + th.Text + `;">` + esc(v) + `</h1>`)
+			text := esc(v)
+			if brand := strings.TrimSpace(th.BrandName); brand != "" && text != "" && !strings.Contains(strings.ToLower(text), strings.ToLower(esc(brand))) {
+				text = esc(brand) + " " + text
+			}
+			return template.HTML(`<h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;color:` + th.Text + `;">` + text + `</h1>`)
 		},
 		"para": func(v any) template.HTML {
 			return template.HTML(`<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:` + th.Text + `;">` + esc(v) + `</p>`)

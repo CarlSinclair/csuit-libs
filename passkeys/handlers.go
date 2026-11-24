@@ -126,6 +126,9 @@ func (h *Handlers) AddFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		name = SessionInfo{UserAgent: r.UserAgent()}.Device()
+	}
 	if err := h.Svc.FinishRegistration(r, id, email, name); err != nil {
 		logger.Warn("%s passkey_add_failed uid=%d err=%v", h.Tag, id, err)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "failed"})

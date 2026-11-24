@@ -16,6 +16,8 @@ const (
 	outageCheckInterval  = 5 * time.Second
 	outagePingTimeout    = 3 * time.Second
 	outageFailuresToDown = 2
+	outageLoadingGrace   = 5 * time.Minute
+	outageStartupGrace   = 90 * time.Second
 )
 
 var (
@@ -23,6 +25,10 @@ var (
 	outageSince atomic.Int64
 	outageOnce  sync.Once
 	outageFails int
+
+	outageStarting  atomic.Bool
+	outageProcStart = time.Now()
+	outageGraceFrom time.Time
 )
 
 func StartOutageMonitor() {
@@ -36,7 +42,15 @@ func outageLoop() {
 	t := time.NewTicker(outageCheckInterval)
 	defer t.Stop()
 	for range t.C {
-		if outagePing() {
+		ok, loading := outagePing()
+		if !ok && !outageDown.Load() && outageInGrace(loading) {
+			outageStarting.Store(true)
+			outageFails = 0
+			continue
+		}
+		outageStarting.Store(false)
+		outageGraceFrom = time.Time{}
+		if ok {
 			outageFails = 0
 			if outageDown.CompareAndSwap(true, false) {
 				since := time.Unix(0, outageSince.Load())
@@ -56,14 +70,29 @@ func outageLoop() {
 	}
 }
 
-func outagePing() bool {
+func outageInGrace(loading bool) bool {
+	if loading {
+		if outageGraceFrom.IsZero() {
+			outageGraceFrom = time.Now()
+			logger.Info("Redis is starting up (loading dataset) addr=%s, not treated as an outage unless it lasts over %s", ActiveAddr(), outageLoadingGrace)
+		}
+		return time.Since(outageGraceFrom) < outageLoadingGrace
+	}
+	return time.Since(outageProcStart) < outageStartupGrace
+}
+
+func outagePing() (bool, bool) {
 	c := Client()
 	if c == nil {
-		return false
+		return false, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), outagePingTimeout)
 	defer cancel()
-	return c.Ping(ctx).Err() == nil
+	err := c.Ping(ctx).Err()
+	if err == nil {
+		return true, false
+	}
+	return false, strings.HasPrefix(strings.ToUpper(err.Error()), "LOADING")
 }
 
 func OutageActive() bool {
@@ -71,7 +100,7 @@ func OutageActive() bool {
 }
 
 func outageSuppresses(message string) bool {
-	if !outageDown.Load() {
+	if !outageDown.Load() && !outageStarting.Load() {
 		return false
 	}
 	m := strings.ToLower(message)

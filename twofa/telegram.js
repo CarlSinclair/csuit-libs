@@ -1,11 +1,17 @@
 (function () {
-  var trigger = document.querySelector("[data-tfa-telegram]");
-  if (!trigger) return;
-  var status = document.querySelector("[data-tfa-status]");
   var timer = null;
+  var trigger = null;
+
+  function stayHeaders(secret) {
+    var h = { "X-Login-Secret": secret };
+    var stay = document.querySelector('select[name="stay"]');
+    if (stay && stay.value) h["X-Stay"] = stay.value;
+    return h;
+  }
 
   function say(key) {
-    if (!status) return;
+    var status = document.querySelector("[data-tfa-status]");
+    if (!status || !trigger) return;
     status.textContent = trigger.getAttribute("data-msg-" + key) || "";
     status.hidden = false;
   }
@@ -15,7 +21,7 @@
       clearInterval(timer);
       timer = null;
     }
-    trigger.disabled = false;
+    if (trigger) trigger.disabled = false;
   }
 
   function poll(token, secret) {
@@ -23,6 +29,12 @@
     var busy = false;
     var done = false;
     timer = setInterval(function () {
+      if (!trigger || !trigger.isConnected) {
+        done = true;
+        clearInterval(timer);
+        timer = null;
+        return;
+      }
       if (done || busy) return;
       tries++;
       if (tries > 60) {
@@ -36,7 +48,7 @@
       fetch(pollURL + (pollURL.indexOf("?") === -1 ? "?" : "&") + "t=" + encodeURIComponent(token), {
         credentials: "same-origin",
         cache: "no-store",
-        headers: { "X-Login-Secret": secret }
+        headers: stayHeaders(secret)
       })
         .then(function (r) {
           return r.json().then(function (j) {
@@ -75,8 +87,11 @@
     }, 2500);
   }
 
-  trigger.addEventListener("click", function () {
+  document.addEventListener("click", function (e) {
+    var t = e.target && e.target.closest ? e.target.closest("[data-tfa-telegram]") : null;
+    if (!t || t.disabled) return;
     stop();
+    trigger = t;
     trigger.disabled = true;
     say("waiting");
     fetch(trigger.getAttribute("data-start"), { credentials: "same-origin", cache: "no-store" })
