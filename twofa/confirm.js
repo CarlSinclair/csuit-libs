@@ -37,8 +37,7 @@
   var dialog = null;
   var statusEl = null;
   var titleEl = null;
-  var emailBox = null;
-  var emailInput = null;
+  var choices = null;
   var timer = null;
   var run = 0;
   var steps = [];
@@ -65,34 +64,14 @@
     dialog = make("dialog", "tfa-dialog");
     titleEl = make("h3");
     statusEl = make("p");
-    emailBox = make("div");
-    emailBox.hidden = true;
-    emailInput = make("input");
-    emailInput.type = "text";
-    emailInput.inputMode = "numeric";
-    emailInput.autocomplete = "one-time-code";
-    emailInput.placeholder = cfg.t.email_label;
-    var send = make("button", "btn");
-    send.type = "button";
-    send.textContent = cfg.t.email_send;
-    send.addEventListener("click", sendEmail);
-    var verify = make("button", "btn");
-    verify.type = "button";
-    verify.textContent = cfg.t.email_verify;
-    verify.addEventListener("click", verifyEmail);
-    emailInput.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        verifyEmail();
-      }
-    });
-    emailBox.append(emailInput, send, verify);
+    choices = make("div");
+    choices.hidden = true;
     var cancel = make("button", cancelClass);
     cancel.type = "button";
     cancel.textContent = cfg.t.cancel;
     cancel.addEventListener("click", abort);
     dialog.addEventListener("cancel", abort);
-    dialog.append(titleEl, statusEl, emailBox, cancel);
+    dialog.append(titleEl, statusEl, choices, cancel);
     document.body.appendChild(dialog);
   }
 
@@ -143,13 +122,13 @@
     startStep(left[0]);
   }
 
-  function poll(token, secret, mine) {
+  function poll(token, secret, mine, name) {
     var tries = 0;
     var busy = false;
     timer = setInterval(function () {
       if (mine !== run || busy) return;
       tries++;
-      if (tries > 60) {
+      if (tries > 150) {
         clearInterval(timer);
         timer = null;
         say("expired");
@@ -167,7 +146,7 @@
           } else if (res.j.status === "approved") {
             clearInterval(timer);
             timer = null;
-            stepDone("telegram");
+            stepDone(name);
           } else if (res.j.status === "denied" || res.j.status === "expired") {
             clearInterval(timer);
             timer = null;
@@ -181,75 +160,27 @@
     }, 2000);
   }
 
-  function sendEmail() {
+  function startStep(name) {
+    stop();
     var mine = run;
-    say("email_wait");
-    getJSON("/email/send")
+    choices.hidden = true;
+    say(name === "email" ? "email_wait" : "waiting");
+    getJSON(name === "email" ? "/email/send" : "/start")
       .then(function (res) {
         if (mine !== run) return;
-        if (res.ok) {
-          say("email_sent");
-          emailInput.focus();
-        } else if (res.status === 429) {
+        if (res.status === 429) {
           say("email_wait");
-        } else {
-          say("email_failed");
+          return;
         }
-      })
-      .catch(function (err) {
-        if (mine !== run) return;
-        console.warn("email code request failed", err);
-        say("email_failed");
-      });
-  }
-
-  function verifyEmail() {
-    var mine = run;
-    var code = emailInput.value.trim();
-    if (!code) return;
-    getJSON("/email/verify", { "X-Email-Code": code })
-      .then(function (res) {
-        if (mine !== run) return;
-        if (res.ok && res.j.status === "approved") {
-          stepDone("email");
-        } else if (res.ok) {
-          say("email_bad");
-        } else {
-          say("email_failed");
-        }
-      })
-      .catch(function (err) {
-        if (mine !== run) return;
-        console.warn("email code check failed", err);
-        say("email_failed");
-      });
-  }
-
-  function startTelegram() {
-    var mine = run;
-    say("waiting");
-    getJSON("/start")
-      .then(function (res) {
-        if (mine !== run) return;
         if (!res.ok) throw new Error("status " + res.status);
-        poll(res.j.token, res.j.secret, mine);
+        say(name === "email" ? "email_sent" : "waiting");
+        poll(res.j.token, res.j.secret, mine, name);
       })
       .catch(function (err) {
         if (mine !== run) return;
         console.warn("approval request failed", err);
-        say("failed");
+        say(name === "email" ? "email_failed" : "failed");
       });
-  }
-
-  function startStep(name) {
-    if (name === "telegram") {
-      emailBox.hidden = true;
-      startTelegram();
-    } else {
-      emailBox.hidden = false;
-      emailInput.value = "";
-      sendEmail();
-    }
   }
 
   function begin(form, submitter) {
@@ -259,22 +190,25 @@
     if (cfg.telegram) steps.push("telegram");
     if (cfg.email) steps.push("email");
     current = { form: form, submitter: submitter, done: {} };
-    titleEl.textContent = cfg.telegram ? cfg.t.title : cfg.t.email_send;
+    titleEl.textContent = cfg.t.title;
     statusEl.textContent = "";
-    emailBox.hidden = true;
+    choices.hidden = true;
+    choices.replaceChildren();
     if (!dialog.open) dialog.showModal();
-    if (cfg.all) {
+    if (cfg.all || steps.length === 1) {
       startStep(steps[0]);
       return;
     }
-    if (cfg.telegram) {
-      startTelegram();
-    }
-    if (cfg.email) {
-      emailBox.hidden = false;
-      emailInput.value = "";
-      if (!cfg.telegram) sendEmail();
-    }
+    steps.forEach(function (name) {
+      var b = make("button", "btn");
+      b.type = "button";
+      b.textContent = name === "email" ? cfg.t.email_send : cfg.t.telegram_send;
+      b.addEventListener("click", function () {
+        startStep(name);
+      });
+      choices.append(b);
+    });
+    choices.hidden = false;
   }
 
   function wire(form, c) {
@@ -287,16 +221,9 @@
       if (form.dataset.tfaOk === "1") return;
       var totp = form.querySelector('input[name="totp_code"]');
       if (!c.all && totp && totp.value.trim() !== "") return;
-      var ec = form.querySelector('input[name="email_code"]');
-      var eff = c;
-      if (ec && ec.value.trim() !== "") {
-        if (c.email && !c.all) return;
-        eff = Object.assign({}, c, { email: false });
-        if (!eff.telegram) return;
-      }
       e.preventDefault();
       e.stopImmediatePropagation();
-      cfg = eff;
+      cfg = c;
       base = form.getAttribute("data-tfa-confirm") || "/2fa/confirm";
       begin(form, e.submitter);
     }, true);

@@ -464,14 +464,7 @@
   document.addEventListener("mousedown", startDrag);
   document.addEventListener("touchstart", startDrag, { passive: false });
 
-  function bindContainer(container) {
-    if (!container || container.dataset.captchaBound === "1") return;
-    container.dataset.captchaBound = "1";
-
-    container.classList.remove("success-flash", "shake");
-    setSolvedUI(container, false);
-    setSubmitEnabled(container, false);
-
+  function startContainer(container) {
     const idInput = container.querySelector('input[name="captcha_id"]');
     const img = container.querySelector(".captcha-image-main");
 
@@ -485,6 +478,30 @@
 
       processCompositeID(container, idInput.value);
     }
+  }
+
+  function bindContainer(container) {
+    if (!container || container.dataset.captchaBound === "1") return;
+    container.dataset.captchaBound = "1";
+
+    container.classList.remove("success-flash", "shake");
+    setSolvedUI(container, false);
+    setSubmitEnabled(container, false);
+
+    if (!("IntersectionObserver" in window)) {
+      startContainer(container);
+      return;
+    }
+    const observer = new IntersectionObserver(function (entries) {
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].isIntersecting) {
+          observer.disconnect();
+          startContainer(container);
+          return;
+        }
+      }
+    });
+    observer.observe(container);
   }
 
   function bindAll() {

@@ -2,6 +2,7 @@
   "use strict";
   var POLL_MS = 30000;
   var FAIL_LIMIT = 3;
+  var CONFIRM_MS = 15000;
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -18,6 +19,7 @@
     this.modal = { category: "", page: 1 };
     this.timer = null;
     this.failures = 0;
+    this.confirming = false;
     this.build();
     this.refresh();
     this.schedule();
@@ -96,6 +98,12 @@
     }
     return fetch(this.prefix + path, opts).then(function (res) {
       if (!res.ok) throw new Error("http " + res.status);
+      var type = res.headers.get("Content-Type") || "";
+      if (type.indexOf("json") === -1) {
+        var err = new Error("not json: " + (res.redirected ? "redirected to " + res.url : type || "no content type"));
+        err.signedOut = res.redirected;
+        throw err;
+      }
       return res.json();
     });
   };
@@ -108,11 +116,37 @@
       self.renderBadge();
       if (!self.panel.hidden) self.renderPanel();
     }).catch(function (err) {
+      if (err && err.signedOut) {
+        if (self.timer) clearInterval(self.timer);
+        self.timer = null;
+        self.state.summary = null;
+        self.renderBadge();
+        return;
+      }
       self.failures += 1;
-      if (self.failures < FAIL_LIMIT) return;
-      console.error("notifications: summary failed", err);
-      self.state.summary = null;
-      if (!self.panel.hidden) self.renderError(self.panel);
+      if (self.failures < FAIL_LIMIT || self.confirming) return;
+      self.confirming = true;
+      setTimeout(function () {
+        self.request("GET", "/summary").then(function (data) {
+          self.confirming = false;
+          self.failures = 0;
+          self.state.summary = data;
+          self.renderBadge();
+          if (!self.panel.hidden) self.renderPanel();
+        }).catch(function (again) {
+          self.confirming = false;
+          if (again && again.signedOut) {
+            if (self.timer) clearInterval(self.timer);
+            self.timer = null;
+            self.state.summary = null;
+            self.renderBadge();
+            return;
+          }
+          console.error("notifications: summary failed", again);
+          self.state.summary = null;
+          if (!self.panel.hidden) self.renderError(self.panel);
+        });
+      }, CONFIRM_MS);
     });
   };
 

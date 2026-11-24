@@ -7,8 +7,8 @@ import (
 	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
-// ConfirmHost carries the five endpoints a signed-in person's confirm dialog
-// calls (config, Telegram start and poll, email send and verify). Each product
+// ConfirmHost carries the four endpoints a signed-in person's confirm dialog
+// calls (config, Telegram start, email send and poll). Each product
 // supplies how it finds the person, reads their methods and sends and checks
 // codes; the endpoints themselves, their logging and their proof recording
 // live here once.
@@ -18,8 +18,7 @@ type ConfirmHost[U any] struct {
 	Methods       func(u U) (all, telegram, email bool, err error)
 	Texts         func(r *http.Request, u U) map[string]string
 	StartTelegram func(r *http.Request, u U) (token, secret string, err error)
-	SendEmail     func(r *http.Request, u U) error
-	CheckEmail    func(u U, code string) (bool, error)
+	SendEmail     func(r *http.Request, u U) (token, secret string, err error)
 	Tenant        func() string
 	Allow         func(w http.ResponseWriter, r *http.Request, u U, bucket string) bool
 	JSON          func(w http.ResponseWriter, r *http.Request, v any)
@@ -88,7 +87,7 @@ func (h ConfirmHost[U]) Poll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := h.UserID(u)
-	status, approvedUID := PollApproval(r.URL.Query().Get("t"), r.Header.Get("X-Login-Secret"))
+	status, approvedUID, method := PollApprovalMethod(r.URL.Query().Get("t"), r.Header.Get("X-Login-Secret"))
 	if status != "approved" {
 		h.JSON(w, r, map[string]any{"status": status})
 		return
@@ -98,8 +97,8 @@ func (h ConfirmHost[U]) Poll(w http.ResponseWriter, r *http.Request) {
 		h.JSON(w, r, map[string]any{"status": "expired"})
 		return
 	}
-	if err := MarkReauth(h.Tenant(), uid, MethodTelegram); err != nil {
-		logger.Error("AUTH 2fa_confirm could not record approval uid=%d err=%v", uid, err)
+	if err := MarkReauth(h.Tenant(), uid, method); err != nil {
+		logger.Error("AUTH 2fa_confirm could not record approval uid=%d method=%s err=%v", uid, method, err)
 		h.Fail(w, r, http.StatusInternalServerError, "tfa_login_telegram_failed")
 		return
 	}
@@ -124,7 +123,8 @@ func (h ConfirmHost[U]) EmailSend(w http.ResponseWriter, r *http.Request) {
 	if !h.allowed(w, r, u, "mail") {
 		return
 	}
-	if err := h.SendEmail(r, u); err != nil {
+	token, secret, err := h.SendEmail(r, u)
+	if err != nil {
 		if errors.Is(err, ErrEmailCooldown) {
 			h.Fail(w, r, http.StatusTooManyRequests, "tfa_login_email_wait")
 			return
@@ -134,36 +134,7 @@ func (h ConfirmHost[U]) EmailSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Info("AUTH 2fa_confirm email sent uid=%d", h.UserID(u))
-	h.JSON(w, r, map[string]any{"ok": true})
-}
-
-func (h ConfirmHost[U]) EmailVerify(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	u, ok := h.Resolve(w, r)
-	if !ok {
-		return
-	}
-	uid := h.UserID(u)
-	if !h.allowed(w, r, u, "verify") {
-		return
-	}
-	good, err := h.CheckEmail(u, r.Header.Get("X-Email-Code"))
-	if err != nil {
-		logger.Error("AUTH 2fa_confirm email check failed uid=%d err=%v", uid, err)
-		h.Fail(w, r, http.StatusInternalServerError, "tfa_login_email_failed")
-		return
-	}
-	if !good {
-		logger.Warn("AUTH 2fa_confirm email bad_code uid=%d", uid)
-		h.JSON(w, r, map[string]any{"status": "invalid"})
-		return
-	}
-	if err := MarkReauth(h.Tenant(), uid, MethodEmail); err != nil {
-		logger.Error("AUTH 2fa_confirm could not record email proof uid=%d err=%v", uid, err)
-		h.Fail(w, r, http.StatusInternalServerError, "tfa_login_email_failed")
-		return
-	}
-	h.JSON(w, r, map[string]any{"status": "approved"})
+	h.JSON(w, r, map[string]any{"token": token, "secret": secret})
 }
 
 func ConfirmFlags(p Prefs, enabled []Method) (all, telegram, email bool) {

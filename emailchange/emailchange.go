@@ -18,6 +18,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
 // TTL is how long a confirmation link stays valid.
@@ -167,6 +169,25 @@ func Confirm(ctx context.Context, st Store, token string, sessionUserID int64, o
 	}
 	if err := st.Apply(ctx, p.UserID, p.NewEmail); err != nil {
 		return p, err
+	}
+	return p, nil
+}
+
+// Start is Request plus mailing the confirmation link: it stores the pending
+// change, builds the link from base and path, hands it to send and, when send
+// fails, cancels the pending change so nothing is left half done. The caller
+// must have proven the person's second factor first (see twofa), never a
+// current password. send is how the product queues its own mail.
+func Start(ctx context.Context, st Store, userID int64, current, newEmail string, opt Options, base, path string, send func(to, link string) error) (Pending, error) {
+	token, p, err := Request(ctx, st, userID, current, newEmail, opt)
+	if err != nil {
+		return p, err
+	}
+	if serr := send(p.NewEmail, Link(base, path, token)); serr != nil {
+		if cerr := Cancel(ctx, st, userID); cerr != nil {
+			logger.Error("emailchange: %v", cerr)
+		}
+		return p, fmt.Errorf("emailchange: send confirmation to %q for user_id=%d: %w", p.NewEmail, userID, serr)
 	}
 	return p, nil
 }

@@ -41,18 +41,19 @@ return 1
 
 const pollScript = `
 local s = redis.call('hget', KEYS[1], 'secret')
-if (not s) or s ~= ARGV[1] then return {'expired', ''} end
+if (not s) or s ~= ARGV[1] then return {'expired', '', ''} end
 local st = redis.call('hget', KEYS[1], 'status')
 if st == 'approved' then
   local uid = redis.call('hget', KEYS[1], 'user')
+  local chat = redis.call('hget', KEYS[1], 'chat')
   redis.call('del', KEYS[1])
-  return {'approved', uid}
+  return {'approved', uid, chat}
 end
 if st == 'denied' then
   redis.call('del', KEYS[1])
-  return {'denied', ''}
+  return {'denied', '', ''}
 end
-return {'pending', ''}
+return {'pending', '', ''}
 `
 
 // Texts is the wording of the approval message, already in the person's language.
@@ -175,29 +176,41 @@ func CallbackTenant(data string) (string, bool) {
 // PollApproval is called by the waiting page. An approved answer is returned
 // once and then forgotten.
 func PollApproval(token, secret string) (status string, userID int64) {
+	status, userID, _ = PollApprovalMethod(token, secret)
+	return status, userID
+}
+
+// PollApprovalMethod is PollApproval that also says which method answered:
+// MethodEmail for a clicked email link, MethodTelegram for a Telegram button.
+func PollApprovalMethod(token, secret string) (status string, userID int64, method Method) {
 	token = strings.TrimSpace(token)
 	if redis.Client() == nil {
 		logger.Error("twofa: poll failed, redis unavailable")
-		return "expired", 0
+		return "expired", 0, ""
 	}
 	if len(token) != 20 || strings.TrimSpace(secret) == "" {
-		return "expired", 0
+		return "expired", 0, ""
 	}
 	res, err := redis.Client().Eval(redis.Ctx, pollScript, []string{approvalKeyPrefix + token}, secretHash(secret)).Slice()
-	if err != nil || len(res) != 2 {
+	if err != nil || len(res) != 3 {
 		logger.Error("twofa: polling approval failed: %v", err)
-		return "expired", 0
+		return "expired", 0, ""
 	}
 	status, _ = res[0].(string)
-	if idStr, _ := res[1].(string); idStr != "" && status == "approved" {
-		id, perr := strconv.ParseInt(idStr, 10, 64)
-		if perr != nil {
-			logger.Error("twofa: approval holds a bad user id %q: %v", idStr, perr)
-			return "denied", 0
-		}
-		userID = id
+	if status != "approved" {
+		return status, 0, ""
 	}
-	return status, userID
+	idStr, _ := res[1].(string)
+	id, perr := strconv.ParseInt(idStr, 10, 64)
+	if perr != nil {
+		logger.Error("twofa: approval holds a bad user id %q: %v", idStr, perr)
+		return "denied", 0, ""
+	}
+	method = MethodTelegram
+	if chat, _ := res[2].(string); chat == emailChat {
+		method = MethodEmail
+	}
+	return status, id, method
 }
 
 // MarkDone remembers that a method was completed for one sign-in in progress

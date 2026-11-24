@@ -23,6 +23,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 
 class MainActivity : AppCompatActivity() {
     private var webView: WebView? = null
@@ -112,6 +114,11 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = false
             setSupportMultipleWindows(false)
             userAgentString = userAgentString + " " + Shell.config.appName.filter { it.isLetterOrDigit() } + "Android/1"
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
+            WebSettingsCompat.setWebAuthenticationSupport(view.settings, WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_APP)
+        } else {
+            android.util.Log.w("Shell", "WebView has no WebAuthn support; passkeys will not work in this app")
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)

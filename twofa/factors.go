@@ -14,19 +14,18 @@ const (
 	MethodTelegram Method = "telegram"
 	MethodEmail    Method = "email"
 	MethodPasskey  Method = "passkey"
+	MethodPassword Method = "password"
 )
 
-// Prefs is what a person chose on their 2FA page besides which methods are
-// switched on: whether every enabled method is required or any one will do,
-// whether a passkey sign-in skips 2FA, and whether Telegram approval is on.
-// It is stored as one small JSON string next to the account.
+// Prefs is what a person chose on their 2FA page: whether 2FA is required to
+// sign in (Require) and whether every enabled method is needed or any one will
+// do (All). Methods are not switched on or off: the authenticator counts once
+// it is set up, Telegram once a chat is linked, email always, and a passkey
+// once one is registered. Require is a pointer so an account that never saved
+// the page requires 2FA at sign-in whenever the authenticator is set up.
 type Prefs struct {
-	Telegram         bool `json:"telegram,omitempty"`
-	Email            bool `json:"email,omitempty"`
-	All              bool `json:"all,omitempty"`
-	PasskeyRequires  bool `json:"passkey_requires,omitempty"`
-	MagicRequires    bool `json:"magic_requires,omitempty"`
-	TelegramRequires bool `json:"telegram_requires,omitempty"`
+	Require *bool `json:"require,omitempty"`
+	All     bool  `json:"all,omitempty"`
 }
 
 func ParsePrefs(raw string) Prefs {
@@ -52,20 +51,31 @@ func (p Prefs) Encode() string {
 }
 
 // Enabled lists the methods that apply to this account: the authenticator when
-// it is set up, Telegram when the person turned it on and has a chat linked, and
-// email when the person turned it on (every account has an address).
+// it is set up, Telegram when a chat is linked, and email always (every account
+// has an address).
 func (p Prefs) Enabled(totpOn, telegramLinked bool) []Method {
 	var out []Method
 	if totpOn {
 		out = append(out, MethodTOTP)
 	}
-	if p.Telegram && telegramLinked {
+	if telegramLinked {
 		out = append(out, MethodTelegram)
 	}
-	if p.Email {
-		out = append(out, MethodEmail)
+	return append(out, MethodEmail)
+}
+
+// RequireLogin reports whether signing in needs a second factor. When the
+// person never chose, it is on for anyone who set up the authenticator.
+func (p Prefs) RequireLogin(enabled []Method) bool {
+	if p.Require != nil {
+		return *p.Require
 	}
-	return out
+	for _, m := range enabled {
+		if m == MethodTOTP {
+			return true
+		}
+	}
+	return false
 }
 
 // Via is how a person proved who they are before the 2FA step.
@@ -78,12 +88,6 @@ const (
 	ViaTelegram Via = "telegram"
 )
 
-// NeedsStep reports whether a sign-in by this route still needs a 2FA step.
-// A password sign-in needs one whenever any method is enabled. Passkey, magic
-// link and Telegram sign-ins need one only when the person turned on the
-// matching "also ask" preference; a magic link then counts as the email method
-// being done and a Telegram sign-in as the Telegram method. Password reset and
-// password change are not decided here: they always require a proof.
 // EnabledSignIn is Enabled plus the passkey, which counts as a method only at
 // sign-in: someone who registered a passkey and then signs in with the
 // password must also prove the passkey (or whatever else they enabled). Proofs
@@ -107,55 +111,111 @@ func WithoutPasskey(enabled []Method) []Method {
 	return out
 }
 
-func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
-	if len(enabled) == 0 {
-		return false
-	}
-	done := map[Method]bool{}
+const firstPrefix = "first:"
+
+func firstMethodOf(v Via) Method {
 	switch v {
 	case ViaPasskey:
-		if !p.PasskeyRequires {
-			return false
-		}
-		done[MethodPasskey] = true
+		return MethodPasskey
 	case ViaMagic:
-		if !p.MagicRequires {
-			return false
-		}
-		done[MethodEmail] = true
+		return MethodEmail
 	case ViaTelegram:
-		if !p.TelegramRequires {
-			return false
-		}
-		done[MethodTelegram] = true
+		return MethodTelegram
 	}
-	return !p.Satisfied(enabled, done)
+	return ""
+}
+
+// NeedsStep reports whether a sign-in by this route still needs a second
+// factor: only when 2FA is required for sign-in and some enabled method other
+// than the one used to sign in is left. A passkey, magic link or Telegram
+// sign-in replaces the password; the method it used never counts as the second
+// factor. Password reset and password change are not decided here: they always
+// require a proof.
+func (p Prefs) NeedsStep(v Via, enabled []Method) bool {
+	if !p.RequireLogin(enabled) {
+		return false
+	}
+	first := firstMethodOf(v)
+	for _, m := range enabled {
+		if m != first {
+			return true
+		}
+	}
+	return false
 }
 
 // SkipsFor reports whether a sign-in needs no 2FA step at all.
 func (p Prefs) SkipsFor(viaPasskey bool, enabled []Method) bool {
-	return len(enabled) == 0 || (viaPasskey && !p.PasskeyRequires)
+	v := ViaPassword
+	if viaPasskey {
+		v = ViaPasskey
+	}
+	return !p.NeedsStep(v, enabled)
 }
 
-// Satisfied reports whether the methods completed so far are enough.
+// MarkFirst records the method a sign-in used (see Satisfied), for routes that
+// replace the password.
+func MarkFirst(sessionKey string, m Method) error {
+	if err := MarkDone(sessionKey, m); err != nil {
+		return err
+	}
+	return MarkDone(sessionKey, Method(firstPrefix+string(m)))
+}
+
+// Satisfied reports whether the methods completed so far are enough. A method
+// recorded with MarkFirst was the sign-in itself and is left out of the count.
 func (p Prefs) Satisfied(enabled []Method, done map[Method]bool) bool {
-	if len(enabled) == 0 {
+	var others []Method
+	for _, m := range enabled {
+		if !done[Method(firstPrefix+string(m))] {
+			others = append(others, m)
+		}
+	}
+	if len(others) == 0 {
 		return true
 	}
 	if p.All {
-		for _, m := range enabled {
+		for _, m := range others {
 			if !done[m] {
 				return false
 			}
 		}
 		return true
 	}
-	for _, m := range enabled {
+	for _, m := range others {
 		if done[m] {
 			return true
 		}
 	}
 	return false
+}
+
+// Status is the account's 2FA picture for the settings page: which of the four
+// methods are connected, how many, and a badge colour (red for one, yellow for
+// two or three, green for all four).
+type Status struct {
+	TOTP, Telegram, Email, Passkey bool
+	Count                          int
+	Level                          string
+	Require, All                   bool
+}
+
+func Summarize(totpOn, telegramLinked, hasPasskey bool) Status {
+	st := Status{TOTP: totpOn, Telegram: telegramLinked, Email: true, Passkey: hasPasskey}
+	for _, on := range []bool{st.TOTP, st.Telegram, st.Email, st.Passkey} {
+		if on {
+			st.Count++
+		}
+	}
+	switch {
+	case st.Count >= 4:
+		st.Level = "green"
+	case st.Count >= 2:
+		st.Level = "yellow"
+	default:
+		st.Level = "red"
+	}
+	return st
 }
 
 // Remaining lists the enabled methods not yet completed.

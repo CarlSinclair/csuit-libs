@@ -30,6 +30,7 @@ type Kit struct {
 	Glob              string
 	JWTSecret         func() []byte
 	PreferredLanguage func(userID int64) (string, error)
+	Shared            func(lang string) map[string]string
 
 	Bundle             *i18n.Bundle
 	AvailableLanguages []string
@@ -57,6 +58,15 @@ func (k *Kit) Init() {
 			continue
 		}
 		langCode := strings.TrimSuffix(base, ".json")
+		if k.Shared != nil {
+			var msgs []*i18n.Message
+			for id, text := range k.Shared(langCode) {
+				msgs = append(msgs, &i18n.Message{ID: id, Other: text})
+			}
+			if aErr := k.Bundle.AddMessages(language.Make(langCode), msgs...); aErr != nil {
+				logger.Error("I18n: adding shared strings to %s failed: %v", langCode, aErr)
+			}
+		}
 		localemeta.Record(langCode, buf)
 		k.AvailableLanguages = append(k.AvailableLanguages, langCode)
 		logger.Info("I18n: Loaded %s", langCode)

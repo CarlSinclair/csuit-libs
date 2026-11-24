@@ -142,24 +142,32 @@ func (r *Refresher) Refresh(ctx context.Context, presentedHash string, sameDevic
 }
 
 func (r *Refresher) heal(ctx context.Context, rec RefreshRecord, presentedHash string, sameDevice func() bool, mint func(userID int64, sid string) (Minted, error)) (Outcome, bool, error) {
-	if sameDevice == nil || !sameDevice() || rec.SupersededAgo > r.healWindow() {
+	if sameDevice == nil || !sameDevice() {
+		logger.Warn("SESSION refresh heal skipped uid=%d sid=%s: the token's device tag does not match this browser", rec.UserID, rec.SID)
+		return Outcome{}, false, nil
+	}
+	if rec.SupersededAgo > r.healWindow() {
+		logger.Warn("SESSION refresh heal skipped uid=%d sid=%s: token superseded %s ago, window is %s", rec.UserID, rec.SID, rec.SupersededAgo.Round(time.Second), r.healWindow())
 		return Outcome{}, false, nil
 	}
 	headHash := presentedHash
 	head := rec
 	for hops := 0; head.Superseded; hops++ {
 		if hops >= r.maxChain() || head.SupersededBy == "" {
+			logger.Warn("SESSION refresh heal skipped uid=%d sid=%s: chain broken after %d hops (successor recorded: %t)", rec.UserID, rec.SID, hops, head.SupersededBy != "")
 			return Outcome{}, false, nil
 		}
 		headHash = head.SupersededBy
 		next, err := r.Store.Find(ctx, headHash)
 		if err != nil {
 			if errors.Is(err, ErrRefreshNotFound) {
+				logger.Warn("SESSION refresh heal skipped uid=%d sid=%s: a token in the chain no longer exists", rec.UserID, rec.SID)
 				return Outcome{}, false, nil
 			}
 			return Outcome{}, false, fmt.Errorf("walk refresh chain uid=%d: %w", rec.UserID, err)
 		}
 		if next.UserID != rec.UserID || next.Expired {
+			logger.Warn("SESSION refresh heal skipped uid=%d sid=%s: a token in the chain expired or belongs to another user", rec.UserID, rec.SID)
 			return Outcome{}, false, nil
 		}
 		head = next

@@ -135,7 +135,7 @@ func Handler() http.HandlerFunc {
 	}
 }
 
-var crawlerMarkers = []string{"googlebot", "bingbot", "adsbot-google", "google-inspectiontool", "googleother", "duckduckbot", "yandexbot", "baiduspider", "applebot", "facebookexternalhit", "slurp"}
+var crawlerMarkers = []string{"googlebot", "bingbot", "adsbot-google", "google-inspectiontool", "googleother", "duckduckbot", "yandexbot", "baiduspider", "applebot", "facebookexternalhit", "facebookcatalog", "meta-webindexer", "meta-externalagent", "slurp"}
 
 func isCrawler(ua string) bool {
 	ua = strings.ToLower(ua)
