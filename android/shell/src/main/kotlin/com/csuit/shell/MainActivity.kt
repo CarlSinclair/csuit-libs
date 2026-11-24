@@ -26,6 +26,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : AppCompatActivity() {
     private var webView: WebView? = null
+    private var nav: NativeNav? = null
     private var origin: String = ""
     private var host: String = ""
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (nav?.closeDrawers() == true) return
                 val view = webView
                 if (view != null && view.canGoBack()) {
                     view.goBack()
@@ -77,6 +79,7 @@ class MainActivity : AppCompatActivity() {
             it.destroy()
         }
         webView = null
+        nav = null
         super.onDestroy()
     }
 
@@ -91,9 +94,15 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val view = WebView(this)
-        val layout = FrameLayout(this)
-        layout.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        setContentView(layout)
+        if (Shell.config.nativeNav) {
+            val created = NativeNav(this, view, origin, Shell.config.bottomNavPaths) { changeInstance() }
+            nav = created
+            setContentView(created.root)
+        } else {
+            val layout = FrameLayout(this)
+            layout.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            setContentView(layout)
+        }
         webView = view
 
         view.settings.apply {
@@ -121,9 +130,14 @@ class MainActivity : AppCompatActivity() {
                 if (request.isForMainFrame) showLoadError()
             }
 
+            override fun onPageCommitVisible(v: WebView, url: String?) {
+                nav?.onCommitVisible()
+            }
+
             override fun onPageFinished(v: WebView, url: String?) {
                 errorShown = false
                 CookieManager.getInstance().flush()
+                nav?.onPageFinished()
             }
         }
 
