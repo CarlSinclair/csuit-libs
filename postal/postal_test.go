@@ -1,11 +1,12 @@
 package postal
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
 
 func TestNormalize(t *testing.T) {
@@ -32,15 +33,21 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestGeoLookup(t *testing.T) {
-	dir := t.TempDir()
-	us := "US\t10001\tNew York\tNew York\tNY\tNew York\t061\t\t\t40.7484\t-73.9967\t4\n"
-	gb := "GB\tSW1A\tLondon\tEngland\tENG\tGreater London\tGLA\t\t\t51.5\t-0.13\t6\n"
-	for name, body := range map[string]string{"US.txt": us, "GB.txt": gb} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o660); err != nil {
+	us := "US\t10001\tNew York\tNew York\tNY\n"
+	gb := "GB\tSW1A\tLondon\tEngland\tENG\n"
+	data := fstest.MapFS{}
+	for name, body := range map[string]string{"US.txt.gz": us, "GB.txt.gz": gb} {
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		if _, err := zw.Write([]byte(body)); err != nil {
 			t.Fatal(err)
 		}
+		if err := zw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		data[name] = &fstest.MapFile{Data: buf.Bytes()}
 	}
-	r := New(dir, "test")
+	r := New(data, "test")
 	p, err := r.Lookup(context.Background(), "us", "10001-9999")
 	if err != nil || len(p) != 1 || p[0].City != "New York" || p[0].Approx {
 		t.Fatalf("US lookup = %+v, %v", p, err)

@@ -3,8 +3,8 @@
 //
 // Brazil is served live from ViaCEP with BrasilAPI as a fallback because
 // Brazilian codes are street-level and no static dataset matches them. Every
-// other country is served from GeoNames postal-code files kept on local disk
-// (see Refresh), so lookups need no third-party call at request time and the
+// other country is served from GeoNames postal-code files (gzipped, embedded
+// by the product and passed to New as an fs.FS), so lookups need no third-party call at request time and the
 // customer's postal code is never sent to an outside service.
 package postal
 
@@ -24,17 +24,15 @@ var (
 )
 
 type Place struct {
-	Country    string  `json:"country"`
-	Postal     string  `json:"postal"`
-	Street     string  `json:"street,omitempty"`
-	District   string  `json:"district,omitempty"`
-	City       string  `json:"city"`
-	Region     string  `json:"region,omitempty"`
-	RegionCode string  `json:"region_code,omitempty"`
-	Lat        float64 `json:"lat,omitempty"`
-	Lon        float64 `json:"lon,omitempty"`
-	Approx     bool    `json:"approx,omitempty"`
-	Source     string  `json:"source"`
+	Country    string `json:"country"`
+	Postal     string `json:"postal"`
+	Street     string `json:"street,omitempty"`
+	District   string `json:"district,omitempty"`
+	City       string `json:"city"`
+	Region     string `json:"region,omitempty"`
+	RegionCode string `json:"region_code,omitempty"`
+	Approx     bool   `json:"approx,omitempty"`
+	Source     string `json:"source"`
 }
 
 var patterns = map[string]*regexp.Regexp{

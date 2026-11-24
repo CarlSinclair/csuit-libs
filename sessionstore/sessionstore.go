@@ -175,7 +175,7 @@ func (s *Store) Rotate(ctx context.Context, _ session.RefreshRecord, oldHash, ne
 		if err == nil {
 			return won, nil
 		}
-		if attempt >= 3 || !isDeadlock(err) {
+		if attempt >= 5 || !isDeadlock(err) {
 			return false, err
 		}
 		logger.Warn("AUTH rotate_deadlock_retry uid=%d attempt=%d err=%v", userID, attempt, err)
@@ -210,16 +210,16 @@ func (s *Store) rotateMySQL(ctx context.Context, oldHash, newHash string, userID
 		userID, newHash, newExpiry, sid, oldHash); err != nil {
 		return false, fmt.Errorf("store successor: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM refresh_tokens WHERE user_id = ? AND (expires_at < NOW() OR (superseded_at IS NOT NULL AND superseded_at < NOW() - INTERVAL 1 HOUR))`,
-		userID); err != nil {
-		return false, fmt.Errorf("prune old tokens: %w", err)
-	}
 	if err := tx.Commit(); err != nil {
 		if errors.Is(err, sql.ErrTxDone) && ctx.Err() != nil {
 			return false, fmt.Errorf("commit rotation: %w", ctx.Err())
 		}
 		return false, fmt.Errorf("commit rotation: %w", err)
+	}
+	if _, err := s.DB().ExecContext(ctx,
+		`DELETE FROM refresh_tokens WHERE user_id = ? AND (expires_at < NOW() OR (superseded_at IS NOT NULL AND superseded_at < NOW() - INTERVAL 1 HOUR))`,
+		userID); err != nil {
+		logger.Warn("AUTH prune_old_tokens_failed uid=%d err=%v", userID, err)
 	}
 	return true, nil
 }

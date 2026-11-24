@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type Resolver struct {
-	DataDir     string
 	HTTP        *http.Client
 	UserAgent   string
 	TTL         time.Duration
@@ -20,23 +20,22 @@ type Resolver struct {
 	geo   *geoStore
 }
 
-func New(dataDir, userAgent string) *Resolver {
+func New(data fs.FS, userAgent string) *Resolver {
 	if userAgent == "" {
 		userAgent = "postal-resolver/1.0"
 	}
 	return &Resolver{
-		DataDir:     dataDir,
 		HTTP:        &http.Client{Timeout: 5 * time.Second},
 		UserAgent:   userAgent,
 		TTL:         24 * time.Hour,
 		NegativeTTL: time.Hour,
 		cache:       newCache(10000),
-		geo:         newGeoStore(dataDir),
+		geo:         newGeoStore(data),
 	}
 }
 
 // Supported reports whether lookups for the country can succeed: Brazil
-// always, other countries once their GeoNames file has been installed.
+// always, other countries when their GeoNames file is in the data filesystem.
 func (r *Resolver) Supported(country string) bool {
 	country = strings.ToUpper(strings.TrimSpace(country))
 	if country == "BR" {
