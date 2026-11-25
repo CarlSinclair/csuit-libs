@@ -194,7 +194,14 @@ class NativeNav(
                 if (it.optString("t") == "h") {
                     entries.add(Entry(it.optString("l"), null))
                 } else {
-                    entries.add(Entry(null, Link(it.optString("l"), it.optString("h"), it.optString("i"), it.optBoolean("a"))))
+                    val href = it.optString("h")
+                    var icon = it.optString("i")
+                    if (icon.isEmpty()) {
+                        icon = prefs.getString(KEY_ICON + pathOf(href), "").orEmpty()
+                    } else {
+                        prefs.edit().putString(KEY_ICON + pathOf(href), icon).apply()
+                    }
+                    entries.add(Entry(null, Link(it.optString("l"), href, icon, it.optBoolean("a"))))
                 }
             }
         }
@@ -615,6 +622,7 @@ class NativeNav(
         const val KEY_BG = "bg"
         const val KEY_NAV_OK = "nav_ok"
         private const val KEY_PINS = "pins"
+        private const val KEY_ICON = "icon:"
         private const val MAX_PINS = 4
         private val RGB = Regex("""rgba?\((\d+),\s*(\d+),\s*(\d+)""")
         private val COLOR_SIDEBAR_BG = Color.parseColor("#1B1E27")
