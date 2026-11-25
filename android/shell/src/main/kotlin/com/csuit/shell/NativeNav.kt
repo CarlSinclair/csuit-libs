@@ -491,7 +491,7 @@ class NativeNav(
         return h
     }
 
-    private fun row(s: State, icon: String, label: String, active: Boolean, onClick: () -> Unit): View {
+    private fun row(s: State, icon: String, label: String, active: Boolean, onClick: () -> Unit): LinearLayout {
         val tint = if (active) s.accent else s.sidebarText
         val r = LinearLayout(activity)
         r.orientation = LinearLayout.HORIZONTAL
