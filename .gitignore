@@ -139,6 +139,9 @@
 /twofa/*
 !/twofa/*.go
 !/twofa/*.js
+!/twofa/locales/
+/twofa/locales/*
+!/twofa/locales/*.json
 !/validate/
 /validate/*
 !/validate/*.go
