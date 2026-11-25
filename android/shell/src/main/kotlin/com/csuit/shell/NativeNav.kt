@@ -648,7 +648,7 @@ class NativeNav(
                 "var hr=n.getAttribute('href')||'';var lb=n.textContent.trim();if(!lb||hr.charAt(0)!=='/')return;" +
                 "items.push({t:'a',l:lb,h:hr,i:ic(n),a:n.classList.contains('is-active')||n.classList.contains('active')||n.getAttribute('aria-current')==='page'});});}" +
                 "var acct=null;if(drop){var ai=[];drop.querySelectorAll('.account-dropdown-item').forEach(function(e,i){" +
-                "ai.push({l:e.textContent.trim(),i:ic(e),x:i});});" +
+                "if(e.tagName!=='A'&&e.tagName!=='BUTTON')return;if(e.querySelector('[data-col-toggle]'))return;ai.push({l:e.textContent.trim(),i:ic(e),x:i});});" +
                 "var nm=document.querySelector('.account-name');var bt=document.querySelector('.account-dropdown-button');" +
                 "acct={name:nm?nm.textContent.trim():'',label:bt?(bt.getAttribute('aria-label')||''):'',items:ai};}" +
                 "var bl=null;if(bell){var bb=bell.querySelector('[aria-label]');var bg=bell.querySelector('.nk-badge');" +

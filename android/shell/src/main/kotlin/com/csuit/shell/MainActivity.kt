@@ -57,7 +57,12 @@ class MainActivity : AppCompatActivity() {
         val config = Shell.config
         origin = config.baseUrl(subdomain)
         host = config.host(subdomain)
-        setupWebView()
+        val boot = FrameLayout(this)
+        boot.setBackgroundColor(getSharedPreferences(NativeNav.PREFS, MODE_PRIVATE).getInt(NativeNav.KEY_BG, ContextCompat.getColor(this, R.color.shell_background)))
+        val bootSpinner = LoadingOverlay(this)
+        boot.addView(bootSpinner, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(boot)
+        bootSpinner.show(0)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (nav?.closeDrawers() == true) return
@@ -69,8 +74,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        val restored = savedInstanceState?.let { webView?.restoreState(it) }
-        if (restored == null) webView?.loadUrl(startUrl(intent))
+        boot.post {
+            setupWebView()
+            val restored = savedInstanceState?.let { webView?.restoreState(it) }
+            if (restored == null) webView?.loadUrl(startUrl(intent))
+            askNotificationsOnce()
+        }
+    }
+
+    private fun askNotificationsOnce() {
+        val prefs = getSharedPreferences("shell_first_run", MODE_PRIVATE)
+        if (prefs.getBoolean("notifications_asked", false)) return
+        prefs.edit().putBoolean("notifications_asked", true).apply()
+        ensureNotificationPermission()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
