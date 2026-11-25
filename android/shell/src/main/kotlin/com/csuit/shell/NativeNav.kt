@@ -16,6 +16,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.core.view.WindowCompat
@@ -57,6 +59,8 @@ class NativeNav(
     private val handler = Handler(Looper.getMainLooper())
     private val density = activity.resources.displayMetrics.density
     private var hasNav = false
+    private var lastState: State? = null
+    private val prefs = activity.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
     private var inset = androidx.core.graphics.Insets.NONE
 
     val root = DrawerLayout(activity)
@@ -67,6 +71,12 @@ class NativeNav(
     private val rightPanel = ScrollView(activity)
 
     init {
+        val savedBg = prefs.getInt(KEY_BG, 0)
+        if (savedBg != 0) {
+            root.setBackgroundColor(savedBg)
+            content.setBackgroundColor(savedBg)
+            webView.setBackgroundColor(savedBg)
+        }
         content.orientation = LinearLayout.VERTICAL
         content.addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         bottomBar.orientation = LinearLayout.HORIZONTAL
@@ -146,6 +156,10 @@ class NativeNav(
 
     private fun setNav(on: Boolean) {
         hasNav = on
+        if (!on) {
+            prefs.edit().putBoolean(KEY_NAV_OK, false).apply()
+            webView.evaluateJavascript(UNHIDE_JS, null)
+        }
         bottomBar.visibility = if (on) View.VISIBLE else View.GONE
         changeLink.visibility = if (on) View.GONE else View.VISIBLE
         lock(!on)
@@ -216,6 +230,9 @@ class NativeNav(
     }
 
     private fun build(s: State) {
+        lastState = s
+        prefs.edit().putInt(KEY_BG, s.pageBg).putBoolean(KEY_NAV_OK, true).apply()
+        webView.setBackgroundColor(s.pageBg)
         root.setBackgroundColor(s.pageBg)
         content.setBackgroundColor(s.pageBg)
         WindowCompat.getInsetsController(activity.window, root).isAppearanceLightStatusBars = Color.luminance(s.pageBg) > 0.5f
@@ -231,8 +248,8 @@ class NativeNav(
         bottomBar.elevation = dp(8).toFloat()
         bottomBar.dividerDrawable = null
         val links = s.entries.mapNotNull { it.link }
-        val picked = bottomPaths.mapNotNull { p -> links.firstOrNull { pathOf(it.href) == p } }.take(3)
-        val destinations = if (picked.size >= 2) picked else links.take(3)
+        val picked = pins().mapNotNull { p -> links.firstOrNull { pathOf(it.href) == p } }.take(MAX_PINS)
+        val destinations = if (picked.isNotEmpty()) picked else links.take(3)
         if (links.isNotEmpty()) {
             bottomBar.addView(barButton(s, "fa-menu", s.menuLabel, false) { root.openDrawer(GravityCompat.START) })
         }
@@ -371,6 +388,107 @@ class NativeNav(
         for (a in s.accountItems) {
             col.addView(row(s, a.icon, a.label, false) { clickAccount(a.index) })
         }
+        col.addView(row(s, "fa-gear", activity.getString(R.string.shell_app_settings), false) { openSettings() })
+    }
+
+    private fun pins(): List<String> {
+        val saved = prefs.getString(KEY_PINS, null)
+        if (saved == null) return bottomPaths
+        return saved.split('\n').filter { it.isNotEmpty() }
+    }
+
+    private fun savePins(list: List<String>) {
+        prefs.edit().putString(KEY_PINS, list.joinToString("\n")).apply()
+        lastState?.let { buildBottomBar(it) }
+    }
+
+    private fun openSettings() {
+        val s = lastState
+        root.closeDrawers()
+        if (s == null) {
+            Log.e(TAG, "settings opened before the navigation was scraped")
+            Toast.makeText(activity, R.string.shell_settings_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dialog = AppCompatDialog(activity, R.style.Theme_Shell)
+        val scroll = ScrollView(activity)
+        scroll.setBackgroundColor(s.sidebarBg)
+        scroll.setPadding(inset.left, inset.top, inset.right, inset.bottom)
+        val col = LinearLayout(activity)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(14), dp(18), dp(14), dp(18))
+        scroll.addView(col)
+
+        val header = LinearLayout(activity)
+        header.orientation = LinearLayout.HORIZONTAL
+        header.gravity = Gravity.CENTER_VERTICAL
+        header.setPadding(dp(14), 0, dp(14), dp(8))
+        val title = TextView(activity)
+        title.text = activity.getString(R.string.shell_app_settings)
+        title.setTextColor(s.sidebarText)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+        title.setTypeface(null, Typeface.BOLD)
+        header.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val close = iconView("fa-x", s.sidebarText, 22)
+        close.setPadding(dp(8), dp(8), dp(8), dp(8))
+        close.layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        close.contentDescription = activity.getString(R.string.shell_close)
+        close.setOnClickListener { dialog.dismiss() }
+        header.addView(close)
+        col.addView(header)
+
+        col.addView(sectionLabel(s, activity.getString(R.string.shell_settings_pins)))
+        val hint = TextView(activity)
+        hint.text = activity.getString(R.string.shell_settings_pins_hint, MAX_PINS)
+        hint.setTextColor(withAlpha(s.sidebarText, 170))
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        hint.setPadding(dp(14), 0, dp(14), dp(8))
+        col.addView(hint)
+
+        val links = s.entries.mapNotNull { it.link }.filter { pathOf(it.href).isNotEmpty() }
+        val pinned = pins().toMutableList()
+        for (l in links) {
+            val path = pathOf(l.href)
+            val mark = iconView("fa-check", s.accent, 20)
+            mark.visibility = if (pinned.contains(path)) View.VISIBLE else View.INVISIBLE
+            val r = row(s, l.icon, l.label, false) {}
+            r.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
+            r.addView(mark)
+            r.setOnClickListener {
+                if (pinned.contains(path)) {
+                    pinned.remove(path)
+                    mark.visibility = View.INVISIBLE
+                } else if (pinned.size >= MAX_PINS) {
+                    Toast.makeText(activity, activity.getString(R.string.shell_settings_pins_max, MAX_PINS), Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                } else {
+                    pinned.add(path)
+                    mark.visibility = View.VISIBLE
+                }
+                savePins(pinned.toList())
+            }
+            col.addView(r)
+        }
+
+        col.addView(sectionLabel(s, activity.getString(R.string.shell_settings_account)))
+        col.addView(row(s, "fa-store", activity.getString(R.string.shell_change_business), false) {
+            dialog.dismiss()
+            onChangeInstance()
+        })
+
+        dialog.setContentView(scroll)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        dialog.show()
+    }
+
+    private fun sectionLabel(s: State, text: String): View {
+        val h = TextView(activity)
+        h.text = text
+        h.setTextColor(withAlpha(s.sidebarText, 150))
+        h.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        h.setTypeface(null, Typeface.BOLD)
+        h.setPadding(dp(14), dp(16), dp(14), dp(6))
+        return h
     }
 
     private fun row(s: State, icon: String, label: String, active: Boolean, onClick: () -> Unit): View {
@@ -465,13 +583,22 @@ class NativeNav(
 
     companion object {
         private const val TAG = "ShellNav"
+        const val PREFS = "shell_nav"
+        const val KEY_BG = "bg"
+        const val KEY_NAV_OK = "nav_ok"
+        private const val KEY_PINS = "pins"
+        private const val MAX_PINS = 4
         private val RGB = Regex("""rgba?\((\d+),\s*(\d+),\s*(\d+)""")
         private val COLOR_SIDEBAR_BG = Color.parseColor("#1B1E27")
         private val COLOR_SIDEBAR_TEXT = Color.parseColor("#F2F3F7")
         private val COLOR_ACCENT = Color.parseColor("#7C5CFF")
 
-        private const val HIDE_JS =
-            "(function(){try{if(window.__shellNavHide)return;window.__shellNavHide=1;var s=new CSSStyleSheet();" +
+        const val UNHIDE_JS =
+            "(function(){try{var s=window.__shellNavSheet;if(s){document.adoptedStyleSheets=document.adoptedStyleSheets.filter(function(x){return x!==s;});}" +
+                "window.__shellNavHide=0;window.__shellNavSheet=null;}catch(e){}})()"
+
+        const val HIDE_JS =
+            "(function(){try{if(window.__shellNavHide)return;window.__shellNavHide=1;var s=new CSSStyleSheet();window.__shellNavSheet=s;" +
                 "s.replaceSync('.admin-sidebar,.admin-topbar-nav-toggle,.fixed-auth-area .nk-button,#dark-switch,.account-dropdown,.admin-content h1{display:none!important}" +
                 ".admin-content{margin-inline-start:0!important;width:100%!important;max-width:100%!important;padding:8px!important;min-height:0!important}" +
                 ".admin-shell-offset{padding-top:0!important}');" +
@@ -483,22 +610,22 @@ class NativeNav(
                 "var e=document.createElement('span');e.style.color=v;document.body.appendChild(e);var c=getComputedStyle(e).color;e.remove();return c;}" +
                 "function pc(p){var m=document.querySelector('.admin-content')||document.body;return getComputedStyle(m)[p===\'color\'?\'color\':\'backgroundColor\'];}" +
                 "function ic(root){var u=root.querySelector('use');var h=u?u.getAttribute('href'):'';return h&&h.indexOf('#')>=0?h.split('#')[1]:'';}" +
-                "var side=document.querySelector('#admin-sidebar .sidebar-nav');" +
+                "var side=document.querySelector('#admin-sidebar .sidebar-nav')||document.querySelector('#admin-sidebar nav');" +
                 "var drop=document.querySelector('.account-dropdown-menu');" +
                 "var bell=document.querySelector('.fixed-auth-area .nk-root');" +
                 "if(!side&&!drop&&!bell)return '';" +
                 "var items=[];" +
-                "if(side){side.querySelectorAll(':scope > li').forEach(function(li){" +
-                "if(li.classList.contains('sidebar-nav-heading')){items.push({t:'h',l:li.textContent.trim()});return;}" +
-                "var a=li.querySelector('a');if(!a)return;" +
-                "items.push({t:'a',l:a.textContent.trim(),h:a.getAttribute('href')||'',i:ic(a),a:a.classList.contains('is-active')});});}" +
+                "if(side){side.querySelectorAll('.sidebar-nav-heading,.sidebar-group-summary,a').forEach(function(n){" +
+                "if(n.matches('.sidebar-nav-heading,.sidebar-group-summary')){var sp=n.querySelector('span');var ht=(sp?sp.textContent:n.textContent).trim();if(ht)items.push({t:'h',l:ht});return;}" +
+                "var hr=n.getAttribute('href')||'';var lb=n.textContent.trim();if(!lb||hr.charAt(0)!=='/')return;" +
+                "items.push({t:'a',l:lb,h:hr,i:ic(n),a:n.classList.contains('is-active')||n.classList.contains('active')||n.getAttribute('aria-current')==='page'});});}" +
                 "var acct=null;if(drop){var ai=[];drop.querySelectorAll('.account-dropdown-item').forEach(function(e,i){" +
                 "ai.push({l:e.textContent.trim(),i:ic(e),x:i});});" +
                 "var nm=document.querySelector('.account-name');var bt=document.querySelector('.account-dropdown-button');" +
                 "acct={name:nm?nm.textContent.trim():'',label:bt?(bt.getAttribute('aria-label')||''):'',items:ai};}" +
                 "var bl=null;if(bell){var bb=bell.querySelector('[aria-label]');var bg=bell.querySelector('.nk-badge');" +
                 "bl={label:bb?(bb.getAttribute('aria-label')||''):'',unread:bg&&!bg.hidden?bg.textContent.trim():''};}" +
-                "var tg=document.querySelector('.admin-topbar-nav-toggle');var th=document.querySelector('#admin-sidebar .sidebar-header h2');" +
+                "var tg=document.querySelector('.admin-topbar-nav-toggle,[data-admin-sidebar-toggle]');var th=document.querySelector('#admin-sidebar .sidebar-header h2');" +
                 "var ds=document.getElementById('dswitch');" +
                 "var o={colors:{sidebarBg:cv('--sidebar-bg'),sidebarText:cv('--sidebar-text'),accent:cv('--primary-color'),bg:pc('background-color'),text:pc('color')}," +
                 "title:th?th.textContent.trim():'',menuLabel:tg?(tg.getAttribute('aria-label')||''):'',items:items,acct:acct,bell:bl};" +

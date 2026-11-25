@@ -64,7 +64,7 @@
       self.togglePanel();
     });
     document.addEventListener("click", function (e) {
-      if (!self.panel.hidden && !self.root.contains(e.target)) self.closePanel();
+      if (!self.panel.hidden && (!self.root.contains(e.target) || e.target === self.root)) self.closePanel();
     });
     this.overlay.addEventListener("click", function (e) {
       if (e.target === self.overlay) self.closeModal();

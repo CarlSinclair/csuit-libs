@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 
 class MainActivity : AppCompatActivity() {
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var host: String = ""
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var errorShown = false
+    private var firstPaint = false
 
     private val fileChooser = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = if (result.resultCode == RESULT_OK) result.data else null
@@ -43,10 +45,13 @@ class MainActivity : AppCompatActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
+        splash.setKeepOnScreenCondition { !firstPaint }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ firstPaint = true }, SPLASH_MAX_MS)
         super.onCreate(savedInstanceState)
         val subdomain = InstanceStore(this).subdomain()
         if (subdomain == null) {
+            firstPaint = true
             startActivity(Intent(this, InstanceActivity::class.java))
             finish()
             return
@@ -66,7 +71,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        webView?.loadUrl(startUrl(intent))
+        val restored = savedInstanceState?.let { webView?.restoreState(it) }
+        if (restored == null) webView?.loadUrl(startUrl(intent))
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView?.saveState(outState)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -107,6 +118,14 @@ class MainActivity : AppCompatActivity() {
         }
         webView = view
 
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
+            WebSettingsCompat.setSafeBrowsingEnabled(view.settings, false)
+        }
+        if (nav != null && getSharedPreferences(NativeNav.PREFS, MODE_PRIVATE).getBoolean(NativeNav.KEY_NAV_OK, false) &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        ) {
+            WebViewCompat.addDocumentStartJavaScript(view, NativeNav.HIDE_JS, setOf(origin))
+        }
         view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -134,10 +153,20 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) showLoadError()
+                if (request.isForMainFrame) {
+                    firstPaint = true
+                    showLoadError()
+                }
+            }
+
+            override fun onRenderProcessGone(v: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                android.util.Log.e("Shell", "web renderer process gone (crashed=${detail.didCrash()}), restarting the screen")
+                runOnUiThread { recreate() }
+                return true
             }
 
             override fun onPageCommitVisible(v: WebView, url: String?) {
+                firstPaint = true
                 nav?.onCommitVisible()
             }
 
@@ -211,5 +240,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_LINK = "link"
+        private const val SPLASH_MAX_MS = 4000L
     }
 }

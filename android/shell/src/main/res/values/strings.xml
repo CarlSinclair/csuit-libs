@@ -13,4 +13,12 @@
     <string name="shell_listener_label">Media detection</string>
     <string name="shell_signin_title">Sign in</string>
     <string name="shell_push_channel_default">Notifications</string>
+    <string name="shell_app_settings">App settings</string>
+    <string name="shell_settings_unavailable">Settings are not ready yet. Try again when the page has loaded.</string>
+    <string name="shell_close">Close</string>
+    <string name="shell_settings_pins">Bottom bar shortcuts</string>
+    <string name="shell_settings_pins_hint">Choose up to %1$d pages to pin in the bottom bar.</string>
+    <string name="shell_settings_pins_max">You can pin up to %1$d pages. Unpin one first.</string>
+    <string name="shell_settings_account">Business</string>
+    <string name="shell_change_business">Change business</string>
 </resources>
