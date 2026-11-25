@@ -227,6 +227,7 @@
 /sharedjs/*
 !/sharedjs/*.go
 !/sharedjs/*.js
+!/sharedjs/*.css
 !/.github/
 /.github/*
 !/.github/workflows/

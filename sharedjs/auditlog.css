@@ -1,0 +1,12 @@
+.al-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.al-filters .form-group{margin:0;flex:1 1 150px;min-width:130px}
+.al-filters input,.al-filters select{width:100%}
+.al-details{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:8px 16px;margin:0}
+.al-details dt{color:var(--secondary-color,var(--text-secondary,#888));font-weight:600}
+.al-details dd{margin:0;overflow-wrap:anywhere}
+.al-pager{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.al-status{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.75rem;font-weight:600}
+.al-status-warn{background:#f59e0b33;color:#f59e0b}
+.al-status-error{background:#ef444433;color:#ef4444}
+.al-status-ok{background:#10b98133;color:#10b981}
+.al-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}

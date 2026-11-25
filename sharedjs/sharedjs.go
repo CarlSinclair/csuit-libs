@@ -11,7 +11,7 @@ import (
 	"github.com/CarlSinclair/csuit-libs/logger"
 )
 
-//go:embed *.js
+//go:embed *.js *.css
 var files embed.FS
 
 const Prefix = "/static/shared/"
@@ -53,7 +53,7 @@ func Handler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Content-Type", contentType(name))
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("ETag", e.etag)
 		if strings.Contains(r.Header.Get("If-None-Match"), e.etag) {
@@ -78,7 +78,7 @@ func File(name string) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Content-Type", contentType(name))
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("ETag", e.etag)
 		if strings.Contains(r.Header.Get("If-None-Match"), e.etag) {
@@ -89,4 +89,11 @@ func File(name string) http.Handler {
 			logger.Warn("sharedjs: serving %s failed: %v", name, err)
 		}
 	})
+}
+
+func contentType(name string) string {
+	if strings.HasSuffix(name, ".css") {
+		return "text/css; charset=utf-8"
+	}
+	return "text/javascript; charset=utf-8"
 }
