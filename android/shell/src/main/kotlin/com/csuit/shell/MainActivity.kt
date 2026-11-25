@@ -187,6 +187,10 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            override fun doUpdateVisitedHistory(v: WebView, url: String?, isReload: Boolean) {
+                nav?.onUrlChanged()
+            }
+
             override fun onPageStarted(v: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 overlay?.show(LOADING_DELAY_MS)
             }

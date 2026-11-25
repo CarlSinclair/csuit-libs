@@ -556,7 +556,22 @@ class NativeNav(
             Log.w(TAG, "refusing navigation to non-local path")
             return
         }
-        webView.loadUrl(origin + href)
+        val quoted = JSONObject.quote(href)
+        webView.evaluateJavascript(
+            "(function(h){var a=document.querySelector('#admin-sidebar a[href='+JSON.stringify(h)+']');if(a){a.click();return 1;}return 0;})($quoted)",
+        ) { result ->
+            if (result != "1") webView.loadUrl(origin + href)
+        }
+    }
+
+    private var rescrape: Runnable? = null
+
+    fun onUrlChanged() {
+        if (!hasNav) return
+        rescrape?.let { handler.removeCallbacks(it) }
+        val r = Runnable { onPageFinished() }
+        rescrape = r
+        handler.postDelayed(r, 350)
     }
 
     private fun clickAccount(index: Int) {
