@@ -64,6 +64,8 @@ class NativeNav(
     private var inset = androidx.core.graphics.Insets.NONE
 
     val root = DrawerLayout(activity)
+    val loading = LoadingOverlay(activity)
+    private val holder = FrameLayout(activity)
     private val content = LinearLayout(activity)
     private val bottomBar = LinearLayout(activity)
     private val changeLink = TextView(activity)
@@ -78,7 +80,9 @@ class NativeNav(
             webView.setBackgroundColor(savedBg)
         }
         content.orientation = LinearLayout.VERTICAL
-        content.addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        holder.addView(webView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        holder.addView(loading, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        content.addView(holder, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         bottomBar.orientation = LinearLayout.HORIZONTAL
         bottomBar.visibility = View.GONE
         content.addView(bottomBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -356,6 +360,7 @@ class NativeNav(
         col.orientation = LinearLayout.VERTICAL
         col.setPadding(dp(14), dp(18), dp(14), dp(18))
         rightPanel.removeAllViews()
+        rightPanel.isFillViewport = true
         rightPanel.setBackgroundColor(s.sidebarBg)
         rightPanel.addView(col)
 
@@ -388,6 +393,14 @@ class NativeNav(
         for (a in s.accountItems) {
             col.addView(row(s, a.icon, a.label, false) { clickAccount(a.index) })
         }
+        val spacer = View(activity)
+        col.addView(spacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        val rule = View(activity)
+        rule.setBackgroundColor(withAlpha(s.sidebarText, 40))
+        col.addView(rule, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+            topMargin = dp(24)
+            bottomMargin = dp(8)
+        })
         col.addView(row(s, "fa-gear", activity.getString(R.string.shell_app_settings), false) { openSettings() })
     }
 
@@ -600,7 +613,7 @@ class NativeNav(
         const val HIDE_JS =
             "(function(){try{if(window.__shellNavHide)return;window.__shellNavHide=1;var s=new CSSStyleSheet();window.__shellNavSheet=s;" +
                 "s.replaceSync('.admin-sidebar,.admin-topbar-nav-toggle,.fixed-auth-area .nk-button,#dark-switch,.account-dropdown,.admin-content h1{display:none!important}" +
-                ".admin-content{margin-inline-start:0!important;width:100%!important;max-width:100%!important;padding:8px!important;min-height:0!important}" +
+                ".admin-content{margin-inline-start:0!important;width:100%!important;max-width:100%!important;padding:8px!important;min-height:0!important;box-sizing:border-box!important}" +
                 ".admin-shell-offset{padding-top:0!important}');" +
                 "document.adoptedStyleSheets=document.adoptedStyleSheets.concat([s]);}catch(e){}})()"
 

@@ -34,7 +34,8 @@ class MainActivity : AppCompatActivity() {
     private var host: String = ""
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var errorShown = false
-    private var firstPaint = false
+    private var overlay: LoadingOverlay? = null
+    private var stopped = false
 
     private val fileChooser = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = if (result.resultCode == RESULT_OK) result.data else null
@@ -45,13 +46,10 @@ class MainActivity : AppCompatActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()
-        splash.setKeepOnScreenCondition { !firstPaint }
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ firstPaint = true }, SPLASH_MAX_MS)
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         val subdomain = InstanceStore(this).subdomain()
         if (subdomain == null) {
-            firstPaint = true
             startActivity(Intent(this, InstanceActivity::class.java))
             finish()
             return
@@ -86,6 +84,26 @@ class MainActivity : AppCompatActivity() {
         webView?.loadUrl(startUrl(intent))
     }
 
+    override fun onStop() {
+        stopped = true
+        super.onStop()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!stopped) return
+        stopped = false
+        val view = webView ?: return
+        overlay?.show(0)
+        view.postDelayed({ overlay?.hide() }, START_MAX_MS)
+        view.onResume()
+        view.resumeTimers()
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.VISUAL_STATE_CALLBACK)) {
+            WebViewCompat.postVisualStateCallback(view, 1L, WebViewCompat.VisualStateCallback { overlay?.hide() })
+        }
+        view.postDelayed({ overlay?.hide() }, RESUME_MAX_MS)
+    }
+
     override fun onDestroy() {
         webView?.let {
             (it.parent as? ViewGroup)?.removeView(it)
@@ -110,10 +128,14 @@ class MainActivity : AppCompatActivity() {
         if (Shell.config.nativeNav) {
             val created = NativeNav(this, view, origin, Shell.config.bottomNavPaths) { changeInstance() }
             nav = created
+            overlay = created.loading
             setContentView(created.root)
         } else {
             val layout = FrameLayout(this)
             layout.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            val plain = LoadingOverlay(this)
+            layout.addView(plain, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            overlay = plain
             setContentView(layout)
         }
         webView = view
@@ -154,7 +176,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
-                    firstPaint = true
+                    overlay?.hide()
                     showLoadError()
                 }
             }
@@ -165,12 +187,17 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            override fun onPageStarted(v: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                overlay?.show(LOADING_DELAY_MS)
+            }
+
             override fun onPageCommitVisible(v: WebView, url: String?) {
-                firstPaint = true
+                overlay?.hide()
                 nav?.onCommitVisible()
             }
 
             override fun onPageFinished(v: WebView, url: String?) {
+                overlay?.hide()
                 errorShown = false
                 CookieManager.getInstance().flush()
                 nav?.onPageFinished()
@@ -240,6 +267,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_LINK = "link"
-        private const val SPLASH_MAX_MS = 4000L
+        private const val LOADING_DELAY_MS = 250L
+        private const val RESUME_MAX_MS = 2500L
+        private const val START_MAX_MS = 20000L
     }
 }
