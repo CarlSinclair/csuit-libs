@@ -7,19 +7,23 @@ import (
 )
 
 const (
-	CatSecurity   = "security"
-	CatBilling    = "billing"
-	CatFinance    = "finance"
-	CatTabs       = "tabs"
-	CatProducts   = "products"
-	CatSupport    = "support"
-	CatModeration = "moderation"
-	CatOrders     = "orders"
-	CatBookings   = "bookings"
-	CatSocial     = "social"
-	CatEpisodes   = "episodes"
-	CatSystem     = "system"
-	CatOther      = "other"
+	CatSecurity     = "security"
+	CatBilling      = "billing"
+	CatFinance      = "finance"
+	CatTabs         = "tabs"
+	CatProducts     = "products"
+	CatSupport      = "support"
+	CatModeration   = "moderation"
+	CatOrders       = "orders"
+	CatBookings     = "bookings"
+	CatSocial       = "social"
+	CatEpisodes     = "episodes"
+	CatSystem       = "system"
+	CatCourses      = "courses"
+	CatReminders    = "reminders"
+	CatFeedback     = "feedback"
+	CatCertificates = "certificates"
+	CatOther        = "other"
 
 	GroupThreshold = 5
 	PageSize       = 20
@@ -28,7 +32,7 @@ const (
 
 var categoryOrder = []string{
 	CatSecurity, CatBilling, CatSupport, CatModeration,
-	CatTabs, CatFinance, CatOrders, CatProducts, CatBookings, CatSocial, CatEpisodes, CatSystem, CatOther,
+	CatTabs, CatFinance, CatOrders, CatProducts, CatBookings, CatSocial, CatEpisodes, CatCourses, CatFeedback, CatCertificates, CatReminders, CatSystem, CatOther,
 }
 
 var categoryRank = func() map[string]int {

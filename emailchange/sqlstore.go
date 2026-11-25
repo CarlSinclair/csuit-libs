@@ -22,6 +22,16 @@ type SQLStore struct {
 	ExpiresCol string
 	ApplyExtra string
 	TextTime   bool
+	// EmptyNotNull clears the pending columns to '' instead of NULL, for
+	// tables that declare them NOT NULL DEFAULT ''.
+	EmptyNotNull bool
+}
+
+func (s *SQLStore) nul() string {
+	if s.EmptyNotNull {
+		return "''"
+	}
+	return "NULL"
 }
 
 func (s *SQLStore) t() string  { return pick(s.Table, "users") }
@@ -122,8 +132,8 @@ func (s *SQLStore) Apply(ctx context.Context, userID int64, newEmail string) err
 	if s.ApplyExtra != "" {
 		extra = ", " + s.ApplyExtra
 	}
-	q := fmt.Sprintf("UPDATE %s SET %s = ?, %s = NULL, %s = NULL, %s = NULL%s WHERE %s = ? AND %s = ?",
-		s.t(), s.em(), s.pe(), s.tk(), s.ex(), extra, s.id(), s.pe())
+	q := fmt.Sprintf("UPDATE %s SET %s = ?, %s = %s, %s = %s, %s = %s%s WHERE %s = ? AND %s = ?",
+		s.t(), s.em(), s.pe(), s.nul(), s.tk(), s.nul(), s.ex(), s.nul(), extra, s.id(), s.pe())
 	res, err := s.DB.ExecContext(ctx, q, newEmail, userID, newEmail)
 	if err != nil {
 		return err
@@ -135,7 +145,7 @@ func (s *SQLStore) Apply(ctx context.Context, userID int64, newEmail string) err
 }
 
 func (s *SQLStore) ClearPending(ctx context.Context, userID int64) error {
-	q := fmt.Sprintf("UPDATE %s SET %s = NULL, %s = NULL, %s = NULL WHERE %s = ?", s.t(), s.pe(), s.tk(), s.ex(), s.id())
+	q := fmt.Sprintf("UPDATE %s SET %s = %s, %s = %s, %s = %s WHERE %s = ?", s.t(), s.pe(), s.nul(), s.tk(), s.nul(), s.ex(), s.nul(), s.id())
 	_, err := s.DB.ExecContext(ctx, q, userID)
 	return err
 }

@@ -1,0 +1,93 @@
+<div class="legal-pages-editor" data-check-url="{{ .CheckURL }}" data-slug-invalid-label="{{ t "lp_slug_invalid" }}" data-slug-available-label="{{ t "lp_slug_available" }}" data-slug-taken-label="{{ t "lp_slug_taken" }}" data-slug-failed-label="{{ t "lp_slug_failed" }}">
+  <h3 class="mt-0">{{ t "lp_title" }}</h3>
+  <p class="opacity-70">{{ t "lp_intro" }}</p>
+  <details class="legal-add-details mb-20">
+    <summary class="flex flex-between items-center">
+      <strong>{{ t "lp_new_page" }}</strong>
+      <span class="btn btn-ghost btn-icon"><svg class="icon"><use href="{{ icon "plus" }}"></use></svg></span>
+    </summary>
+    <form method="POST" action="{{ .PostURL }}" class="mt-15 lp-add-form">
+      {{ if $.CSRFName }}<input type="hidden" name="{{ $.CSRFName }}" value="{{ $.CSRFValue }}">{{ end }}
+      <input type="hidden" name="lp_action" value="add">
+      <label>{{ t "lp_lang_label" }}
+        <input type="text" name="new_lang" class="w-100" list="lp-lang-suggestions" autocomplete="off" required data-same-lang data-resolve-url="{{ .ResolveURL }}">
+        <datalist id="lp-lang-suggestions">{{ range .LangSuggestions }}<option value="{{ . }}"></option>{{ end }}</datalist>
+        <span class="opacity-70" data-lang-resolved></span>
+      </label>
+      <div class="lp-fields">
+        <label>{{ t "lp_slug" }} <input type="text" name="new_slug" data-slug-input data-page-id="0" class="w-100" pattern="[a-z0-9][a-z0-9\-]*" maxlength="64"><span class="slug-status opacity-70"></span></label>
+        <label>{{ t "lp_title_label" }} <input type="text" name="new_title" class="w-100"></label>
+        <label>{{ t "lp_body" }} <a href="#modal-lp-md-help" class="md-link">({{ t "lp_markdown" }})</a><textarea name="new_body" rows="10" class="w-100 mono"></textarea></label>
+      </div>
+      {{ if .Pages }}<div data-same-group>
+      <div class="tswitch-row"><div class="tswitch"><input type="checkbox" class="tswitch-input" id="lp_same_as_on" name="same_as_on" value="1" data-same-toggle><label for="lp_same_as_on" class="tswitch-label"><div class="ball"></div></label></div><label for="lp_same_as_on">{{ t "lp_same_as" }}</label></div>
+      <label class="lp-same-as">{{ t "lp_same_as_label" }}
+        <select name="same_as" class="w-100" data-same-select>
+          <option value="">{{ t "lp_same_as_pick" }}</option>
+          {{ range .Pages }}<option value="{{ .ID }}" data-langs="{{ .LangList }}">{{ t "lp_page_prefix" }} #{{ .ID }}{{ range .Variants }}{{ if .Slug }} · /{{ .Slug }}{{ end }}{{ end }}</option>{{ end }}
+        </select>
+      </label>
+      </div>{{ end }}
+      <button type="submit" class="btn mt-10">{{ t "lp_create" }}</button>
+    </form>
+  </details>
+  {{ range .Pages }}{{ $pid := .ID }}
+  <details class="page-card card mb-20" id="legal-page-{{ .ID }}" {{ if .Enabled }}open{{ end }}>
+    <summary><strong>{{ t "lp_page_prefix" }} #{{ .ID }}{{ range .Variants }}{{ if .Slug }} · /{{ .Slug }}{{ end }}{{ end }}</strong> <span class="opacity-70">{{ if .Enabled }}{{ t "lp_enabled" }}{{ else }}{{ t "lp_disabled" }}{{ end }}</span></summary>
+    <form method="POST" action="{{ $.PostURL }}">
+      {{ if $.CSRFName }}<input type="hidden" name="{{ $.CSRFName }}" value="{{ $.CSRFValue }}">{{ end }}
+      <input type="hidden" name="lp_action" value="save">
+      <input type="hidden" name="page_ids" value="{{ .ID }}">
+      <div class="tswitch-row"><div class="tswitch"><input type="checkbox" class="tswitch-input" id="page_enabled_{{ .ID }}" name="page_enabled_{{ .ID }}" value="1"{{ if .Enabled }} checked{{ end }}><label for="page_enabled_{{ .ID }}" class="tswitch-label"><div class="ball"></div></label></div><label for="page_enabled_{{ .ID }}">{{ t "lp_page_on" }}</label></div>
+      <div data-cards="{{ .ID }}">
+        {{ range .Variants }}{{ if .Exists }}
+        <fieldset class="legal-lang" data-card data-card-lang="{{ .Lang }}">
+          <legend><span data-card-name>{{ langName .Lang }}</span> <div class="tswitch"><input type="checkbox" class="tswitch-input" id="pg-{{ $pid }}-{{ .Lang }}-en" name="enabled_{{ $pid }}_{{ .Lang }}" value="1"{{ if .Enabled }} checked{{ end }}><label for="pg-{{ $pid }}-{{ .Lang }}-en" class="tswitch-label"><div class="ball"></div></label></div></legend>
+<div class="lp-fields">
+<label>{{ t "lp_slug" }} <input type="text" name="slug_{{ $pid }}_{{ .Lang }}" value="{{ .Slug }}" data-slug-input data-page-id="{{ $pid }}" class="w-100" pattern="[a-z0-9][a-z0-9\-]*" maxlength="64"><span class="slug-status opacity-70"></span></label>
+<label>{{ t "lp_title_label" }} <input type="text" name="title_{{ $pid }}_{{ .Lang }}" value="{{ .Title }}" class="w-100"></label>
+<label>{{ t "lp_body" }} <a href="#modal-lp-md-help" class="md-link">({{ t "lp_markdown" }})</a><textarea name="body_{{ $pid }}_{{ .Lang }}" rows="10" class="w-100 mono">{{ .Body }}</textarea></label>
+</div>
+        </fieldset>
+        {{ end }}{{ end }}
+      </div>
+      <div class="lp-foot">
+        <button type="submit" class="btn">{{ t "lp_save_page" }}</button>
+        <button type="submit" form="legal-page-delete-{{ .ID }}" class="btn btn-danger btn-icon" aria-label="{{ t "lp_delete_page" }}" title="{{ t "lp_delete_page" }}"><svg class="icon"><use href="{{ icon "trash" }}"></use></svg></button>
+      </div>
+    </form>
+    <form id="legal-page-delete-{{ .ID }}" method="POST" action="{{ $.PostURL }}" data-confirm="{{ t "lp_confirm_delete" }}" hidden>
+      {{ if $.CSRFName }}<input type="hidden" name="{{ $.CSRFName }}" value="{{ $.CSRFValue }}">{{ end }}
+      <input type="hidden" name="lp_action" value="delete">
+      <input type="hidden" name="page_id" value="{{ .ID }}">
+    </form>
+  </details>
+  {{ else }}
+  <p class="opacity-70">{{ t "no_results" }}</p>
+  {{ end }}
+  <div id="modal-lp-md-help" class="modal">
+    <a href="#" class="modal-close-overlay"></a>
+    <div class="modal-content">
+      <a href="#" class="close-x">&times;</a>
+      <div class="modal-header"><h2 class="mt-0">{{ t "markdown_title" }}</h2></div>
+      <table class="md-help-table">
+        <tbody>
+          <tr><td><code># Heading</code></td><td>{{ t "md_row_heading_pre" }}<code>#</code>{{ t "md_row_heading_mid" }}<code>######</code>{{ t "md_row_heading_post" }}</td></tr>
+          <tr><td><code>**bold**</code></td><td><strong>{{ t "md_row_bold" }}</strong></td></tr>
+          <tr><td><code>_italic_</code></td><td><em>{{ t "md_row_italic" }}</em></td></tr>
+          <tr><td><code>~~strike~~</code></td><td><del>{{ t "md_row_strike" }}</del></td></tr>
+          <tr><td><code>- item</code></td><td>{{ t "md_row_list_pre" }}<code>*</code> {{ t "md_row_or" }} <code>-</code>{{ t "md_row_list_post" }}</td></tr>
+          <tr><td><code>1. item</code></td><td>{{ t "md_row_numbered_list" }}</td></tr>
+          <tr><td><code>[text](https://x.com)</code></td><td>{{ t "md_row_link" }}</td></tr>
+          <tr><td><code>![alt](https://x.com/img.png)</code></td><td>{{ t "md_row_image" }}</td></tr>
+          <tr><td><code>&gt; quote</code></td><td>{{ t "md_row_blockquote" }}</td></tr>
+          <tr><td><code>`code`</code></td><td>{{ t "md_row_inline_code" }}</td></tr>
+          <tr><td><code>```<br>code block<br>```</code></td><td>{{ t "md_row_codeblock" }}</td></tr>
+          <tr><td><code>---</code></td><td>{{ t "md_row_hr" }}</td></tr>
+          <tr><td><code>| a | b |<br>|---|---|<br>| 1 | 2 |</code></td><td>{{ t "md_row_table" }}</td></tr>
+        </tbody>
+      </table>
+      <p class="opacity-70">{{ t "legal_markdown_note" }}</p>
+    </div>
+  </div>
+</div>

@@ -62,6 +62,10 @@
 !/legalpages/
 /legalpages/*
 !/legalpages/*.go
+!/legalpages/*.html
+!/legalpages/locales/
+/legalpages/locales/*
+!/legalpages/locales/*.json
 !/localemeta/
 /localemeta/*
 !/localemeta/*.go
@@ -175,6 +179,9 @@
 /notifykit/*
 !/notifykit/*.go
 !/notifykit/assets/
+!/notifykit/locales/
+/notifykit/locales/*
+!/notifykit/locales/*.json
 !/objstore/
 /objstore/*
 !/objstore/*.go
@@ -236,3 +243,15 @@
 !/goosedb/
 /goosedb/*
 !/goosedb/*.go
+!/accountkit/
+/accountkit/*
+!/accountkit/*.go
+!/accountkit/locales/
+/accountkit/locales/*
+!/accountkit/locales/*.json
+!/auditlog/
+/auditlog/*
+!/auditlog/*.go
+!/auditlog/locales/
+/auditlog/locales/*
+!/auditlog/locales/*.json
