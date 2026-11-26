@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/CarlSinclair/csuit-libs/logger"
@@ -28,7 +29,16 @@ const (
 	spoolFileMode os.FileMode = 0o660
 )
 
+var spoolRoot atomic.Value
+
+func SetSpoolRoot(dir string) {
+	spoolRoot.Store(dir)
+}
+
 func spoolFile() (string, error) {
+	if v, ok := spoolRoot.Load().(string); ok && v != "" {
+		return filepath.Join(v, "spool", "redis-enqueue.jsonl"), nil
+	}
 	dir, err := logger.AppRootDir()
 	if err != nil {
 		return "", fmt.Errorf("spool directory unavailable: %w", err)
