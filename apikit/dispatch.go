@@ -96,8 +96,10 @@ func (e *Emitter) client() *http.Client {
 	if e.Client != nil {
 		return e.Client
 	}
-	return NewSafeClient(nil)
+	return defaultEmitterClient
 }
+
+var defaultEmitterClient = NewSafeClient(nil)
 
 func (e *Emitter) Run(ctx context.Context) {
 	if n, err := redis.RecoverProcessing(e.queue()); err != nil {

@@ -41,15 +41,20 @@ func (c *Clock) warnOnce(key, format string, args ...interface{}) {
 
 func (c *Clock) Location() *time.Location {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.loc != nil && time.Since(c.checked) < cacheTTL {
-		return c.loc
+		loc := c.loc
+		c.mu.Unlock()
+		return loc
 	}
+	c.mu.Unlock()
+
 	name := ""
 	if c.source != nil {
 		name = strings.TrimSpace(c.source())
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if name == "" {
 		c.loc, c.name, c.checked = time.UTC, "UTC", time.Now()
 		return c.loc

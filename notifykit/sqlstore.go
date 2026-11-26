@@ -133,9 +133,27 @@ func (s *SQLStore) Counts(userID int64) ([]CategoryCount, error) {
 		return nil, err
 	}
 	rows.Close()
-	for i := range out {
-		if err := s.db.QueryRow(`SELECT title FROM notifications WHERE user_id=? AND category=? ORDER BY created_at DESC, id DESC LIMIT 1`, userID, out[i].Category).Scan(&out[i].LatestTitle); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("latest notification title for user %d: %w", userID, err)
+	if len(out) > 0 {
+		titleRows, err := s.db.Query(`SELECT category, title FROM (SELECT category, title, ROW_NUMBER() OVER (PARTITION BY category ORDER BY created_at DESC, id DESC) AS rn FROM notifications WHERE user_id=?) ranked WHERE rn=1`, userID)
+		if err != nil {
+			return nil, fmt.Errorf("latest notification titles for user %d: %w", userID, err)
+		}
+		titles := map[string]string{}
+		for titleRows.Next() {
+			var category, title string
+			if err := titleRows.Scan(&category, &title); err != nil {
+				titleRows.Close()
+				return nil, fmt.Errorf("scan latest notification title for user %d: %w", userID, err)
+			}
+			titles[category] = title
+		}
+		if err := titleRows.Err(); err != nil {
+			titleRows.Close()
+			return nil, fmt.Errorf("latest notification titles for user %d: %w", userID, err)
+		}
+		titleRows.Close()
+		for i := range out {
+			out[i].LatestTitle = titles[out[i].Category]
 		}
 	}
 	return SortCounts(out), nil
