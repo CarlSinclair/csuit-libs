@@ -240,9 +240,18 @@ func sample(s map[string]any) any {
 	return nil
 }
 
+func joinURL(base, path string) string {
+	for k := len(path); k > 1; k-- {
+		if (k == len(path) || path[k] == '/') && strings.HasSuffix(base, path[:k]) {
+			return base + path[k:]
+		}
+	}
+	return base + path
+}
+
 func curl(base string, op apikit.Op, body any) string {
 	var b strings.Builder
-	url := base + op.Path
+	url := joinURL(base, op.Path)
 	b.WriteString("curl -X " + op.Method + " \"" + url + "\" \\\n")
 	b.WriteString("  -H \"Authorization: Bearer $API_KEY\"")
 	if body != nil {
@@ -280,7 +289,9 @@ export function verify(secret, headers, rawBody) {
   const fresh = Math.abs(Date.now() / 1000 - Number(ts)) < 300;
   return fresh && given.length === expected.length &&
     crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
-}`
+}
+
+const ok = verify("whsec_...", req.headers, rawBody);`
 
 func RenderBody(d Doc, T func(string) string) (template.HTML, error) {
 	tpl, err := template.New("apidocs").Funcs(template.FuncMap{

@@ -50,7 +50,7 @@ var patterns = map[string]*regexp.Regexp{
 	"NL": regexp.MustCompile(`^[0-9]{4}[A-Z]{2}$`),
 }
 
-var generic = regexp.MustCompile(`^[A-Z0-9]{2,10}$`)
+var generic = regexp.MustCompile(`^[A-Z0-9]{3,10}$`)
 
 // minPrefix lists countries whose GeoNames file holds only the outward part of
 // the code. A full code is matched by shortening it down to this length.
