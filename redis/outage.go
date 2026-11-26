@@ -2,8 +2,6 @@ package redis
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,21 +55,14 @@ func outageLoop() {
 				d := time.Since(since).Round(time.Second)
 				n := logger.TakeSuppressedCount()
 				logger.Info("Redis outage: recovered addr=%s downtime=%s suppressed_alerts=%d", ActiveAddr(), d, n)
-				if !tenantProcess() {
-					logger.SendStateAlert("redis-outage", fmt.Sprintf("Redis is back up (%s, down for %s). %d Redis-related alert(s) were suppressed during the outage; every one is in the journal.", hostLabel(), d, n))
-				}
+				// Availability is reported once for the whole box by csuit's monitor, so no app sends a Redis state alert.
 			}
 			continue
 		}
 		outageFails++
 		if outageFails >= outageFailuresToDown && outageDown.CompareAndSwap(false, true) {
 			outageSince.Store(time.Now().UnixNano())
-			if tenantProcess() {
-				logger.Warn("Redis outage: unreachable addr=%s, tenant process, only the main app alerts", ActiveAddr())
-			} else {
-				logger.Error("Redis outage: unreachable addr=%s, further Redis errors are not alerted until it is back", ActiveAddr())
-				logger.SendStateAlert("redis-outage", "Redis is DOWN ("+hostLabel()+"). Further Redis errors are silenced until it recovers.")
-			}
+			logger.Warn("Redis outage: unreachable addr=%s, Redis availability is alerted by csuit only", ActiveAddr())
 		}
 	}
 }
@@ -120,29 +111,6 @@ func outageSuppresses(message string) bool {
 		return true
 	}
 	return false
-}
-
-func tenantProcess() bool {
-	if exe, err := os.Executable(); err == nil && strings.Contains(exe, "/tenants/") {
-		return true
-	}
-	for _, a := range os.Args[1:] {
-		if a == "--tenant" || strings.HasPrefix(a, "--tenant=") {
-			return true
-		}
-	}
-	return false
-}
-
-func hostLabel() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "unknown process"
-	}
-	if i := strings.LastIndex(exe, "/"); i >= 0 {
-		exe = exe[i+1:]
-	}
-	return exe
 }
 
 const outageBackoff = 15 * time.Second
